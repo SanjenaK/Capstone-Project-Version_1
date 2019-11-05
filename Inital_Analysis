@@ -1,0 +1,964 @@
+# Initial Analysis for Arrhythmia Dataset
+
+
+
+## Packages to Install
+
+##install.packages("dplyr")
+##install.packages("ggplot2")
+##install.packages("tidyr")
+
+
+
+# Data Preparation
+
+
+
+## Importing and loading the 'Arrhythmia' dataset from UCI <https://archive.ics.uci.edu/ml/datasets/Arrhythmia> :
+arrhythmia <- read.table("https://archive.ics.uci.edu/ml/machine-learning-databases/arrhythmia/arrhythmia.data", header = FALSE, sep = ",")
+
+
+## Overview of the imported dataset
+
+### To view more of our data in R:
+getOption("max.print")
+options("max.print" = 1000000)
+
+dim(arrhythmia)
+###There are 452 observations, 279 attributes and 1 class attribute.
+
+names(arrhythmia)
+###Need to rename the column names to be more informative.
+
+#str(arrhythmia)
+###Cannot see all of the attributes and so, will use glimpse from dplyr package.
+
+## Looking at the full dataset, its structure, variables, datatypes and some observations, using glimpse from dplyr package.
+library(dplyr)
+glimpse(arrhythmia)
+###Here, it is seen that arrhythmia has 452 observations and 280 variables (1 variable for class labels).
+###All of the variables are of integer, factor and numeric classes. The data types need to be corrected later.
+###The variable names should be more informative.
+###There are '?' values that likely represent missing values.
+
+## Viewing head and tail of the dataset
+head(arrhythmia, 10)
+tail(arrhythmia, 10)   
+###There are many numerical values, many 0's, and the presence of '?' (e.g. in V14).
+
+## Closer look at the variables and their data types in the imported dataset
+arrhythmia_summary <- summary(arrhythmia)
+arrhythmia_summary
+###The first 10 variables are numeric but V9 is of integer type.
+###V2 has a minimum of 0 and maximum of 1 and could be a factor or boolean type.
+###V11 to V14 should be numeric like V10 since all of them contain vector angles. These variables have '?' values.
+###V15 is integer.
+###V16 to V21 show integer characteristics, except V20 shows no variations from 0.
+###V22 to V27 show logical types with minimum of 0 and maximum of 1.
+######The pattern from V16 to V27 repeats until V159. This is expected to repeat 12 times for measured variables for the 12 lead channels. 
+######V68, 70, 84, 132, 133, 140, 142, 144, 146, 152, 157, and 158 shows no variation from 0.
+###V160 to V169 are all of numeric types.
+######V160 to V169 pattern repeats until V279. This is expected to repeat 12 times for measured variables for the 12 lead channels. 
+######V165, 265, and 275 show no variation from 0.
+###V280 is integer type but makes more sense to be of factor type since this is the class attribute.
+
+
+
+## Assigning Correct Data Types, Appropriate Attribute Names and Replacing Missing Values with 'NA'
+
+
+### Inspecting the data types in the dataset
+
+int_var <- lapply(arrhythmia, is.integer)
+int_variables <- arrhythmia[0, (int_var == TRUE)]
+length(int_variables) ### 155
+
+num_var <- lapply(arrhythmia, is.numeric)
+num_variables <- arrhythmia[0, (num_var == TRUE)]
+length(num_variables) ### 275
+
+factor_var <- lapply(arrhythmia, is.factor)
+factor_variables <- arrhythmia[0, (factor_var == TRUE)]
+length(factor_variables) ### 5
+
+summary(arrhythmia[, 11:15]) 
+###These "Vector Angles in Degree" variables should be integers and would be later converted.
+
+logical_var <- lapply(arrhythmia, is.logical)
+logical_variables <- arrhythmia[0, (logical_var == TRUE)]
+length(logical_variables) 
+###There is 0 logical variables but there should be some logical variables in our dataset.
+
+
+
+### Renaming Attributes and Class Labels
+
+
+#### Relabelling attributes with more informative variable names using authors' descriptions.
+attr_names <- c(c("Age_yr", "Sex", "Height_cm", "Weight_kg", "Avg_QRS_duration_msec", 
+                  "Avg_duration_bet_onset_P_and_Q_waves_msec", "Avg_duration_bet_onset_Q_and_offset_T_waves_msec", 
+                  "Avg_duration_bet_two_consecutive_T_waves_msec", "Avg_duration_bet_two_consecutive_P_waves_msec", 
+                  "Vector_angle_front_QRS_deg", "Vector_angle_front_T_deg", "Vector_angle_front_P_deg", 
+                  "Vector_angle_front_QRST_deg", "Vector_angle_front_J_deg", "Heart_rate_bpm"),
+                paste(c(rep("DI", 12), rep("DII", 12), rep("DIII", 12), rep("AVR", 12), rep("AVL", 12), rep("AVF", 12), 
+                        rep("V1", 12), rep("V2", 12), rep("V3", 12), rep("V4", 12), rep("V5", 12), rep("V6", 12)),
+                      rep(c("Avg_width_Q_wave_msec", "Avg_width_R_wave_msec", "Avg_width_S_wave_msec", 
+                            "Avg_width_R'_wave_msec", "Avg_width_S'_wave_msec", "No_intrinsic_deflections", 
+                            "Existence_diphasic_R_wave", "Existence_notched_R_wave", 
+                            "Existence_notched_P_wave", "Existence_diphasic_P_wave", 
+                            "Existence_notched_T_wave", "Existence_diphasic_T_wave"), 12), sep = "_"),
+                paste(c(rep("DI", 10), rep("DII", 10), rep("DIII", 10), rep("AVR", 10), rep("AVL", 10), rep("AVF", 10),
+                        rep("V1", 10), rep("V2", 10), rep("V3", 10), rep("V4", 10), rep("V5", 10), rep("V6", 10)),
+                      rep(c("J_point_depression_mV", "Amp_Q_wave_mV", "Amp_R_wave_mV", "Amp_S_wave_mV", 
+                            "Amp_R'_wave_mV", "Amp_S'_wave_mV", "Amp_P_wave_mV", "Amp_T_wave_mV", "QRSA", 
+                            "QRSTA"), 10), sep = "_"), 
+                "Arrhythmia_Class")
+
+names(arrhythmia) <- attr_names
+
+
+#### Renaming class labels and converting class from integer to categorical variable
+
+###The last "Arrhythmia_Class" column is the class attribute and should be a factor variable.
+str(arrhythmia$Arrhythmia_Class) ### integer
+summary(arrhythmia$Arrhythmia_Class)
+table(arrhythmia$Arrhythmia_Class)
+###There are no class 11, 12 and 13 groups, which were to be classified as "first_degree_atrioventricular_block", 
+###"second_degree_atrioventricular_block", and "third_degree_atrioventricular_block". Since there were no observations 
+###classifed to these three groups, atrioventricular block arrhythmia class labels were omitted for this dataset.
+
+arr_class_labels <- c("normal", "coronary_artery_disease", 
+                      "old_anterior_myocardial_infarction", "old_inferior_myocardial_infarction", 
+                      "sinus_tachycardy", "sinus_bradycardy", "ventricular_premature_contraction", 
+                      "supraventricular_premature_contraction", "left_bundle_branch_block", 
+                      "right_bundle_branch_block", "left_ventricule_hypertrophy", "atrial_fibrillation", 
+                      "other")
+arrhythmia$Arrhythmia_Class <- factor(arrhythmia$Arrhythmia_Class, labels = arr_class_labels, ordered = FALSE)
+
+##### Verifying the class attribute names and data type.
+table(arrhythmia$Arrhythmia_Class)
+str(arrhythmia$Arrhythmia_Class) ### factor
+levels(arrhythmia$Arrhythmia_Class)
+
+
+### Checking the renamed dataset
+glimpse(arrhythmia)
+str(arrhythmia)
+
+
+
+### Dealing With Apparent Missing Values
+
+
+###Earlier, '?' values were found in the dataset. This would be replaced with 'NA' for clarifying the 'missingness' in this dataset.
+
+#### Identifying the number of missing values
+sum(is.na(arrhythmia)) ### 0
+sum(is.null(arrhythmia)) ### 0
+sum(arrhythmia == '?') ### 408
+408/(452*279) ### This is approximately 3.24% of the data.
+
+
+#### Columns with the missing values
+arrhythmia_na_col <- apply((arrhythmia == '?'), MARGIN = 2, FUN = sum)
+sum(arrhythmia_na_col) ### 408
+arrhythmia_na_col[arrhythmia_na_col!= 0]   
+###Vector_angle_front_T_deg, Vector_angle_front_P_deg, Vector_angle_front_QRST_deg, Vector_angle_front_J_deg 
+###and Heart_rate_bpm (V11 to V15) have '?' values.
+
+###To get more info about the observation (Age, Heart rate and Class) with the missing 'Heart_rate_bpm' value:
+arrhythmia %>%
+  select(Age_yr, Heart_rate_bpm, Arrhythmia_Class) %>%
+  filter(Heart_rate_bpm == '?') ### 75 year-old with arrhythmia class 7.
+
+###Since V11 to V14 are logical variables and V15 is integer, these '?' can be replaced with 'NA'.
+
+
+#### Rows with the missing values
+arrhythmia_na_row <- apply((arrhythmia == '?'), MARGIN = 1, FUN = sum)
+sum(arrhythmia_na_row) ### 408
+##which(arrhythmia_na_row != 0)
+table(arrhythmia$Arrhythmia_Class[which(arrhythmia_na_row != 0)])
+###Observations in all classes have missing values.
+
+
+#### Replacing '?' with NA
+arrhythmia[arrhythmia == '?'] <- NA
+which(arrhythmia == '?') ### 0
+sum(is.na(arrhythmia)) ### Confirms all '?' changed to NA
+
+
+
+### Checking for Duplicate Rows
+anyDuplicated(arrhythmia) 
+###There are 0 duplicate observations.
+
+
+
+### Assigning Correct Attribute Data Types
+
+
+#### Converting 2nd variable: integer to factor type
+###Out of the first 15 attributes, only "Sex" is supposed to be a categorical variable.
+str(arrhythmia$Sex) ### integer
+
+arrhythmia$Sex <- factor(arrhythmia$Sex, labels = c("male", "female"), ordered = FALSE)
+
+#### Verifying changed factor variable
+str(arrhythmia$Sex) ### factor
+arrhythmia$Sex[1:10]
+levels(arrhythmia$Sex)
+
+
+#### Convert 10th to 15th varibles: factor to integer types
+###The factor variables in the dataframe should be integers:
+###"Vector_angle..." variables (10th-14th): "Vector_angle_front_QRS_deg", 
+###"Vector_angle_front_T_deg", "Vector_angle_front_P_deg", 
+###"Vector_angle_front_QRST_deg" and "Vector_angle_front_J_deg".
+str(arrhythmia[, 10:14]) ### factor
+
+arrhythmia[, 10:14] <- as.integer(unlist(arrhythmia[, 10:14]))
+
+#### Verifying changed data types
+str(arrhythmia[, 10:14]) ### integer
+summary(arrhythmia[, 10:14])
+
+
+###"Heart_rate_bpm" (15th) variable should also be integer.
+str(arrhythmia$Heart_rate_bpm) ### factor
+
+arrhythmia$Heart_rate_bpm <- as.integer(arrhythmia$Heart_rate_bpm)
+
+#### Verifying changed data type
+str(arrhythmia$Heart_rate_bpm) ### integer
+summary(arrhythmia$Heart_rate_bpm)
+
+
+#### Convert integer to logical data types 
+###"Existence..." variables should be changed for all leads (DI through V6) to logical type:
+###"Existence_diphasic_R_wave", "Existence_notched_R_wave", "Existence_notched_P_wave", 
+###"Existence_diphasic_P_wave", "Existence_notched_T_wave" and "Existence_diphasic_T_wave".
+str(arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)]) ### integer
+summary(arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)])
+###These attributes' summaries show logical type characteristics, ranging from 0 to 1.
+###No variation in attributes can be researched and removed later.
+
+arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)] <- as.logical(
+  unlist(arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)]))
+
+#### Verifying changed data types
+str(arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)]) ### logical
+summary(arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)])
+
+
+
+### Checking the updated dataset and the number of integer, numeric, factor and logical variables 
+glimpse(arrhythmia) 
+
+int_var2 <- lapply(arrhythmia, is.integer)
+int_variables2 <- arrhythmia[0, (int_var2 == TRUE)]
+length(int_variables2) ### 86
+
+num_var2 <- lapply(arrhythmia, is.numeric)
+num_variables2 <- arrhythmia[0, (num_var2 == TRUE)]
+length(num_variables2) ### 206
+
+factor_var2 <- lapply(arrhythmia, is.factor)
+factor_variables2 <- arrhythmia[0, (factor_var2 == TRUE)]
+length(factor_variables2) ### 2
+
+logical_var2 <- lapply(arrhythmia, is.logical)
+logical_variables2 <- arrhythmia[0, (logical_var2 == TRUE)]
+length(logical_variables2) ### 72
+
+206+2+72 ### 280 variables.
+
+
+
+### Moving the class attribute (280th) to the front for better visibility of classes.
+arrhythmia2 <- arrhythmia %>%
+  select(Arrhythmia_Class, everything())
+
+glimpse(arrhythmia2)
+
+## Saving cleaned arrhythmia dataset as arrhythmia_clean:
+arrhythmia_clean <- arrhythmia2
+
+
+
+## Saving and writing cleaned arrhythmia dataset into a .csv file
+##write.csv(arrhythmia_clean, "C:/Users/sanje/Desktop/CKME136/data/arrhythmia_clean.csv", row.names = FALSE)
+##write.table(arrhythmia_clean, "C:/Users/sanje/Desktop/CKME136/data/arrhythmia_clean2", sep = ",", row.names = FALSE)
+
+
+
+# Inital Analysis (Continued) & Exploratory Data Analysis
+
+
+
+glimpse(arrhythmia_clean)
+
+## Summary Statistics
+attrs1 <- arrhythmia_clean[,c(2, 4:16)]
+##str(attrs1)
+attr_summary1 <- summary(attrs1)
+attr_summary1
+
+attrs2 <- arrhythmia_clean[ ,c(17:21, 29:34, 41:46, 53:58, 65:70, 77:82, 89:94, 101:106, 113:118, 125:130, 137:142, 149:154)]
+##str(attrs2)
+attr_summary2 <- summary(attrs2)
+attr_summary2
+
+attrs3 <- arrhythmia_clean[, 161:279]
+##str(attrs3)
+attr_summary3 <- summary(attrs3)
+attr_summary3
+
+
+
+## Univariate Analysis
+
+#install.packages("ggplot2")
+library(ggplot2)
+
+
+
+### Class attribute: Arrhythmia_Class
+
+##summary(arrhythmia2$Arrhythmia_Class)
+
+arr_class_table <- table(arrhythmia_clean$Arrhythmia_Class)
+arr_class_table
+arr_class_freq <- prop.table(arr_class_table)
+arr_class_freq
+
+#### Histogram
+cl_col <- c("#CC3399", "#CC0066", "#CC3333", "#993300", "#CC0099", "#6600CC", "#3399FF", "#333CCC", "#990066", "#330099", "#CC0033", "#CC00CC", "#000066")
+ggplot(arrhythmia_clean, aes(x = Arrhythmia_Class)) +
+  geom_bar(fill = cl_col, col = cl_col) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+##coord_flip()
+###It is evident that there is class imbalance in this dataset.
+###Approximately 54.2% of the data belonging to "normal" class and less than 12% for the rest of the classes. 
+
+
+#### Proportion of Observations in Each Class
+ggplot(arrhythmia_clean, aes(x = Arrhythmia_Class, y = ..count../sum(..count..))) + 
+  geom_bar(fill = cl_col, col = cl_col) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Proportion") +
+  ggtitle("Proportion of Observations in Each Class")+
+  xlab(NULL)
+
+###Approximately 54.2% of the data belonging to "normal" class and 
+###less than 12% for the rest of the classes. We need to adjust for 
+###this later on.
+
+
+# Age_yr
+#To choose binwidth for histogram with intervals of 5 years.
+age_bw <- (max(arrhythmia_clean$Age_yr) - min(arrhythmia_clean$Age_yr) ) / 17
+
+ggplot(arrhythmia_clean, aes(x = Age_yr)) + 
+  geom_histogram(binwidth = age_bw)
+
+summary(arrhythmia_clean$Age_yr)   ###Subjects were from 0 to 83  years old.
+
+ggplot(arrhythmia_clean, aes(y = Age_yr)) + 
+  geom_boxplot()
+
+### Looking into outliers:
+arrhythmia_clean[arrhythmia_clean$Age_yr < 3, 1:2]
+###Outliers represent infants of 0, 1 and 1, with sinus_tachycardy.
+
+
+# Sex
+ggplot(arrhythmia_clean, aes(x = Sex)) + 
+  geom_bar()
+
+table(arrhythmia_clean$Sex) ###Roughly similar in dataset.
+
+
+# Height_cm
+summary(arrhythmia_clean$Height_cm)
+ggplot(arrhythmia_clean, aes(y = Height_cm)) + 
+  geom_boxplot()
+# Should replace last 2 outliers because it is unlikely for human height to be above 600cm and therefore, are mistakes.
+
+arrhythmia_clean$Age_yr[arrhythmia_clean$Height_cm > 600] 
+###Ages for these outliers are 0 and 1.  It makes more sense if an extra 0 was added by mistake. 
+###Thus, can replace values with value/10.
+
+### Replacing outliers with more plausiable values.
+for (i in 1:nrow(arrhythmia_clean)) {
+  if (arrhythmia_clean$Height_cm[i] > 600) {
+    arrhythmia_clean$Height_cm[i] <- arrhythmia_clean$Height_cm[i] / 10
+  }
+}
+
+arrhythmia_clean$Age_yr[arrhythmia_clean$Height_cm > 600]  ###Verifying replacments.
+
+summary(arrhythmia_clean$Height_cm)
+ggplot(arrhythmia_clean, aes(y = Height_cm)) + 
+  geom_boxplot()
+###There are heights under 150cm as well.
+
+ggplot(arrhythmia_clean, aes(x = Height_cm)) + 
+  geom_histogram()
+
+
+# Weight_kg
+summary(arrhythmia_clean$Weight_kg)
+ggplot(arrhythmia_clean, aes(y = Weight_kg)) + 
+  geom_boxplot()
+###The outliers make sense when considering the range of age for patients in this dataset.
+
+ggplot(arrhythmia_clean, aes(x = Weight_kg)) + 
+  geom_histogram()
+###Fairly normally distributed
+
+
+# Average QRS duration (msec.)
+summary(arrhythmia_clean$Avg_QRS_duration_msec)
+ggplot(arrhythmia_clean, aes(y = Avg_QRS_duration_msec)) +
+  geom_boxplot()
+ggplot(arrhythmia_clean, aes(x = Avg_QRS_duration_msec)) + 
+  geom_histogram()
+####Skewed to the right.
+##boxplot.stats(arrhythmia_clean$Avg_QRS_duration_msec)
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Avg_QRS_duration_msec) %>%
+  filter(Avg_QRS_duration_msec > 120)
+###Most are of LBBB & RBBB cases (one AFib and one sinus tachycardy) 
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Avg_QRS_duration_msec) %>%
+  filter(Avg_QRS_duration_msec < 60)
+###normal 
+
+# Average Duration Between Onset of P and Q waves (msec.)
+summary(arrhythmia_clean$Avg_duration_bet_onset_P_and_Q_waves_msec)
+ggplot(arrhythmia_clean, aes(y = Avg_duration_bet_onset_P_and_Q_waves_msec)) +
+  geom_boxplot()
+###Outliers at 0 and above 500.
+ggplot(arrhythmia_clean, aes(x = Avg_duration_bet_onset_P_and_Q_waves_msec)) + 
+  geom_histogram()
+###More normal distribution.
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_onset_P_and_Q_waves_msec) %>%
+  filter(Avg_duration_bet_onset_P_and_Q_waves_msec > 225)
+###Show normal cases (1 sinus bradycardy).
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_onset_P_and_Q_waves_msec) %>%
+  filter(Avg_duration_bet_onset_P_and_Q_waves_msec < 100)
+###0's maybe mistakes in normal class. Maybe replace with medians for normal.
+###Sinus bradycardy, CAD, AFib, other, RBBB.
+
+
+# Average Duration Between Onset of Q and Offset of T waves (msec.)
+summary(arrhythmia_clean$Avg_duration_bet_onset_Q_and_offset_T_waves_msec)
+ggplot(arrhythmia_clean, aes(y = Avg_duration_bet_onset_Q_and_offset_T_waves_msec)) +
+  geom_boxplot()
+ggplot(arrhythmia_clean, aes(x = Avg_duration_bet_onset_Q_and_offset_T_waves_msec)) + 
+  geom_histogram()
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_onset_Q_and_offset_T_waves_msec) %>%
+  filter(Avg_duration_bet_onset_Q_and_offset_T_waves_msec > 440)
+###Outliers contain normal, CAD, sinus bradycardy, LBBB
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_onset_Q_and_offset_T_waves_msec) %>%
+  filter(Avg_duration_bet_onset_Q_and_offset_T_waves_msec < 300)
+###Outliers contian many arrhythmia classes, sinus tachycardy, normal, CAD, OAMI, AFib. 
+
+
+# Average Duration Between Two Consecutive T waves (msec.)
+summary(arrhythmia_clean$Avg_duration_bet_two_consecutive_T_waves_msec)
+ggplot(arrhythmia_clean, aes(y = Avg_duration_bet_two_consecutive_T_waves_msec)) +
+  geom_boxplot()
+ggplot(arrhythmia_clean, aes(x = Avg_duration_bet_two_consecutive_T_waves_msec)) + 
+  geom_histogram()
+####Skewed to the right
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_two_consecutive_T_waves_msec) %>%
+  filter(Avg_duration_bet_two_consecutive_T_waves_msec > 225)
+###A few normal observations. Mostly, CAD, LBBB, RBBB, OIMI, OAMI, one sinus tachycardy
+
+
+# Average Duration Between Two Consecutive P waves (msec.)
+summary(arrhythmia_clean$Avg_duration_bet_two_consecutive_P_waves_msec)
+ggplot(arrhythmia_clean, aes(y = Avg_duration_bet_two_consecutive_P_waves_msec)) +
+  geom_boxplot()
+ggplot(arrhythmia_clean, aes(x = Avg_duration_bet_two_consecutive_P_waves_msec)) + 
+  geom_histogram()
+###Fairly normally distributed.
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_two_consecutive_P_waves_msec) %>%
+  filter(Avg_duration_bet_two_consecutive_P_waves_msec > 135)
+###Show many normal cases, other, OAMI, RBBB.
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_two_consecutive_P_waves_msec) %>%
+  filter(Avg_duration_bet_two_consecutive_P_waves_msec < 50)
+###Mix of sinus bradycardy, normal, other, AFib, RBBB, CAD
+
+
+# Vector Angle on Front of QRS (degree)
+summary(arrhythmia_clean$Vector_angle_front_QRS_deg)
+ggplot(arrhythmia_clean, aes(y = Vector_angle_front_QRS_deg)) +
+  geom_boxplot()
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_QRS_deg)) + 
+  geom_histogram()
+###Skewed to the left.
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Vector_angle_front_QRS_deg) %>%
+  filter(Vector_angle_front_QRS_deg > 155)
+###Outlier is normal case.
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Vector_angle_front_QRS_deg) %>%
+  filter(Vector_angle_front_QRS_deg < -120)
+###RBBB & 1 sinus tachycardy
+
+
+# Vector Angle on Front of T (degree) *removed 8 rows because 8 NA's
+summary(arrhythmia_clean$Vector_angle_front_T_deg)
+ggplot(arrhythmia_clean, aes(y = Vector_angle_front_T_deg)) +
+  geom_boxplot()
+###No outliers
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_T_deg)) + 
+  geom_histogram()
+###Skewed to the left.
+
+
+# Vector Angle on Front of P (degree) *removed 22 rows because of 22 NA's
+summary(arrhythmia_clean$Vector_angle_front_P_deg)
+ggplot(arrhythmia_clean, aes(y = Vector_angle_front_P_deg)) +
+  geom_boxplot()
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_P_deg)) + 
+  geom_histogram()
+###Skewed to the left.
+arrhythmia_clean %>%
+  select(Age_yr, Arrhythmia_Class, Vector_angle_front_P_deg) %>%
+  filter(Vector_angle_front_P_deg < 20)
+###Outliers normal, sinus bradycary, CAD, sinus tachycardy, LBBB, other
+
+
+# Vector Angle on Front of QRST (degree) *removed 1 row because of 1 NA 
+summary(arrhythmia_clean$Vector_angle_front_QRST_deg)
+ggplot(arrhythmia_clean, aes(y = Vector_angle_front_QRST_deg)) +
+  geom_boxplot()
+###No outliers
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_QRST_deg)) + 
+  geom_histogram()
+###Skewed to the left.
+
+
+# Vector Angle on Front of J (degree) *removed 376 rows beacuse of 376 NA's
+summary(arrhythmia_clean$Vector_angle_front_J_deg)
+ggplot(arrhythmia_clean, aes(y = Vector_angle_front_J_deg)) +
+  geom_boxplot()
+###No outliers
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_J_deg)) + 
+  geom_histogram()
+###More uniform distribution
+###Maybe remove
+
+
+# Heart_rate_bpm *removed 1 row because of 1 NA
+summary(arrhythmia_clean$Heart_rate_bpm)
+ggplot(arrhythmia_clean, aes(y = Heart_rate_bpm)) +
+  geom_boxplot()
+ggplot(arrhythmia_clean, aes(x = Heart_rate_bpm)) + 
+  geom_histogram()
+###Looking at the boxplot of the heart rates, less than 10bpm are outliers:
+#Slight skewed to the left.
+arrhythmia_clean %>%
+  select(Age_yr, Heart_rate_bpm, Arrhythmia_Class) %>%
+  filter(Heart_rate_bpm < 10)
+### May need to replace with median of classes because heart rate does not make sense for classes like normal, RBBB, AFib.
+ggplot(arrhythmia_clean, aes(x = Heart_rate_bpm, fill = Arrhythmia_Class)) + 
+  geom_histogram()
+#The range looks more noraml heart rates. 
+
+
+# Average Width of Q wave (msec.), Average Width of R wave (msec.), Average Width of S wave (msec.), Average Width of R' wave (msec.) and Average Width of S' wave (msec.) for DI, DII, DIII, AVR, AVL, AVF, V1, V2, V3, V4, V5 and V6 channels
+summary(arrhythmia_clean[, c(17:21, 29:33, 41:45, 53:57, 65:69, 77:81, 89:93, 101:105, 113:117, 125:129, 137:141, 149:153)])
+
+avg_x_labels <- c("Q wave", "R wave", "S wave", "R' wave", "S' wave")
+boxplot(arrhythmia_clean[, c(17:21)], main = "Average widths of waves for DI channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(29:33)], main = "Average widths of waves for DII channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(41:45)], main = "Average widths of waves for DIII channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(53:57)], main = "Average widths of waves for AVR channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(65:69)], main = "Average widths of waves for AVL channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(77:81)], main = "Average widths of waves for AVF channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(89:93)], main = "Average widths of waves for V1 channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(101:105)], main = "Average widths of waves for V2 channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(113:117)], main = "Average widths of waves for V3 channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(125:129)], main = "Average widths of waves for V4 channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(137:141)], main = "Average widths of waves for V5 channel", names = avg_x_labels)
+boxplot(arrhythmia_clean[, c(149:153)], main = "Average widths of waves for V6 channel", names = avg_x_labels)
+
+## Outliers
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 17])$out,c(1,17)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 18])$out,c(1,18)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 20])$out,c(1,20)]
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 29])$out,c(1,29)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 30])$out,c(1,30)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 31])$out,c(1,31)]
+#only 1 OIMI
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 32])$out,c(1,32)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 33])$out,c(1,33)]
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 41])$out,c(1,41)]
+###6 OIMI, 5 normal, 4 other, 3 RBBB
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 42])$out,c(1,42)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 43])$out,c(1,43)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 44])$out,c(1,44)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 45])$out,c(1,45)]
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 53])$out,c(1,53)]
+###11 OIMI have 0?
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 55])$out,c(1,55)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 56])$out,c(1,56)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 57])$out,c(1,57)]
+###1 normal case
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 65])$out,c(1,65)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 66])$out,c(1,66)]
+###all normal cases
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 68])$out,c(1,68)]
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 77])$out,c(1,77)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 78])$out,c(1,78)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 79])$out,c(1,79)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 80])$out,c(1,80)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 81])$out,c(1,81)]
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 89])$out,c(1,89)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 90])$out,c(1,90)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 91])$out,c(1,91)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 92])$out,c(1,92)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 93])$out,c(1,93)]
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 101])$out,c(1,101)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 102])$out,c(1,102)]
+###7 OIMI included
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 103])$out,c(1,103)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 104])$out,c(1,104)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 105])$out,c(1,105)]
+###3 normal
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 113])$out,c(1,113)]
+###7 OIMI included
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 114])$out,c(1,114)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 115])$out,c(1,115)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 116])$out,c(1,116)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 117])$out,c(1,117)]
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 125])$out,c(1,125)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 126])$out,c(1,126)]
+###6 RBBB & 5 OIMI
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 127])$out,c(1,127)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 128])$out,c(1,128)]
+###all normal
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 129])$out,c(1,129)]
+###1 normal
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 137])$out,c(1,137)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 138])$out,c(1,138)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 139])$out,c(1,139)]
+###5 RBBB, 1 OIMI, 4 normal
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 140])$out,c(1,140)]
+###all normal
+
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 149])$out,c(1,149)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 150])$out,c(1,150)]
+###13 RBBB included
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 152])$out,c(1,152)]
+
+boxplot(arrhythmia_clean[, c(149:153)], main = "Average widths of waves for V6 channel", names = avg_x_labels)
+
+
+# Number of Intrinsic Deflections for DI, DII, DIII, AVR, AVL, AVF, V1, V2, V3, V4, V5 and V6 channels
+no_of_intrin_deflect <- arrhythmia_clean[, c(22, 34, 46, 58, 70, 82, 94, 106, 118, 130, 142, 154)]
+summary(arrhythmia_clean[, c(22, 34, 46, 58, 70, 82, 94, 106, 118, 130, 142, 154)])
+
+par(mfrow=c(2, 2))
+boxplot(arrhythmia_clean[, 22], main = "No. of Intrinsic Deflections for DI channel")
+boxplot(arrhythmia_clean[, 34], main = "No. of Intrinsic Deflections for DII channel")
+boxplot(arrhythmia_clean[, 46], main = "No. of Intrinsic Deflections for DIII channel")
+boxplot(arrhythmia_clean[, 58], main = "No. of Intrinsic Deflections for AVR channel")
+boxplot(arrhythmia_clean[, 70], main = "No. of Intrinsic Deflections for AVL channel")
+boxplot(arrhythmia_clean[, 82], main = "No. of Intrinsic Deflections for AVF channel")
+boxplot(arrhythmia_clean[, 94], main = "No. of Intrinsic Deflections for V1 channel")
+boxplot(arrhythmia_clean[, 106], main = "No. of Intrinsic Deflections for V2 channel")
+boxplot(arrhythmia_clean[, 118], main = "No. of Intrinsic Deflections for V3 channel")
+boxplot(arrhythmia_clean[, 130], main = "No. of Intrinsic Deflections for V4 channel")
+boxplot(arrhythmia_clean[, 142], main = "No. of Intrinsic Deflections for V5 channel")
+boxplot(arrhythmia_clean[, 154], main = "No. of Intrinsic Deflections for V6 channel")
+
+## Outliers
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 22])$out,c(1,22)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 34])$out,c(1,34)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 46])$out,c(1,46)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 70])$out,c(1,70)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 82])$out,c(1,82)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 94])$out,c(1,94)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 106])$out,c(1,106)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 118])$out,c(1,118)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 130])$out,c(1,130)]
+###all normal
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 142])$out,c(1,142)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 154])$out,c(1,154)]
+arrhythmia_clean[boxplot.stats(arrhythmia_clean[, 22])$out,c(1,22)]
+###overall sinus bradycardy, OIMI, other, normal, RBBB
+
+
+# Existence of Diphasic R wave, Existence of Notched R wave, Existence of Notched P wave, Existence of Diphasic P wave, Existence of Notched T wave, Existence of Diphasic T wave 
+exist_of_waves <- arrhythmia_clean[ ,c(23:28, 35:40, 47:52, 59:64, 71:76, 83:88, 95:100, 107:112, 119:124, 131:136, 143:148, 155:160)]
+summary(arrhythmia_clean[ ,c(23:28, 35:40, 47:52, 59:64, 71:76, 83:88, 95:100, 107:112, 119:124, 131:136, 143:148, 155:160)])
+
+par(mfrow=c(1, 1))
+
+ext_x_labels <- c("Diaphasic R wave", "Notched R wave", "Notched P wave", "Diaphasic P wave", "Notched T wave", "Diaphasic T wave")
+boxplot(arrhythmia_clean[, c(23:28)], main = "DI channel", names = ext_x_labels)
+
+for (i in c(23:28, 35:40, 47:52, 59:64, 71:76, 83:88, 95:100, 107:112, 119:124, 131:136, 143:148, 155:160)) {
+  ggplot(arrhythmia_clean, aes(x = arrhythmia_clean[, i])) +
+    geom_bar()
+}
+
+
+# Amplitude of Q wave (mV), Amplitude of R wave (mV), Amplitude of S wave (mV), Amplitude of R' wave (mV), Amplitude of S' wave (mV), Amplitude of P wave (mV) and Amplitude of T wave (mV) for DI, DII, DIII, AVR, AVL, AVF, V1, V2, V3, V4, V5 and V6 channels
+summary(arrhythmia_clean[, 161:280])
+
+amp_x_labels <- c("J point depression", "Amp of Q wave", "Amp of R wave", "Amp of S wave", "Amp of R' wave", "Amp of S' wave", "Amp of P wave", "Amp of T wave", "QRSA", "QRSTA")
+boxplot(arrhythmia_clean[, c(161:170)], main = "DI channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(171:180)], main = "DII channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(181:190)], main = "DIII channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(191:200)], main = "AVR channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(201:210)], main = "AVL channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(211:220)], main = "AVF channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(221:230)], main = "V1 channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(231:240)], main = "V2 channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(241:250)], main = "V3 channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(251:260)], main = "V4 channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(261:270)], main = "V5 channel", names = amp_x_labels)
+boxplot(arrhythmia_clean[, c(271:280)], main = "V6 channel", names = amp_x_labels)
+
+
+
+## Bivariate Analysis
+
+
+ggplot(arrhythmia_clean, aes(x = Age_yr, fill = Arrhythmia_Class)) + 
+  geom_histogram(binwidth = age_bw, col = "black")
+
+ggplot(arrhythmia_clean, aes(x = Sex, fill = Arrhythmia_Class)) + 
+  geom_bar(col = "black")
+
+ggplot(arrhythmia_clean, aes(x = Height_cm, fill = Arrhythmia_Class)) + 
+  geom_histogram()
+
+ggplot(arrhythmia_clean, aes(x = Weight_kg, fill = Arrhythmia_Class)) + 
+  geom_histogram()
+
+
+ggplot(arrhythmia_clean, aes(x = Avg_QRS_duration_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###See some deviations from the density plot for normal class and between different classes, like Left Bundle Branch Block.
+
+ggplot(arrhythmia_clean, aes(x = Avg_duration_bet_onset_P_and_Q_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###See that the class for Atrial fibrillation or flutter drastically differs from the other classes and normal class.
+###VPC, SVPC, LBB all shift to right slightly.
+###See many different behaviours amoung the different classes.  Can be important for distinguishing the types of arrythmias.
+
+ggplot(arrhythmia_clean, aes(x = Avg_duration_bet_onset_Q_and_offset_T_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###Many differences between classes. May be important as well to distinguish types of arrythmia.
+###Ventricular and supraventricaular premature contractions behave most different form the other classes and normal class.
+###LBBB, SB to left more, ST to right more.
+
+ggplot(arrhythmia_clean, aes(x = Avg_duration_bet_two_consecutive_T_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+####Many differences between classes. May be important to distinguish classes.
+
+ggplot(arrhythmia_clean, aes(x = Avg_duration_bet_two_consecutive_P_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###See that the class for Atrial fibrillation or flutter drastically differs from the other classes and normal class.
+###Simliar to "Avg_duration_bet_onset_of_P_and_Q_waves_msec". Can be important for distinguishing the types of arrythmias.
+
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_QRS_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###Different behaviours amoung classes and normal class. May be important to distinguish type of arrhythmia.
+
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_T_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###Left Bundle Branch Block has a very different behaviour from the rest.
+###Many differences between classes.May be very important to distinguish types of arrythmia.**
+
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_P_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###Many differences between classes and from normal class. May be important.
+
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_QRST_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###Left Bundle Brach Block more different than from other classes and normal class. May be important.
+
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_J_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###Conary Artery Disease and Old Anterior Myocardial Infarction differ from other classes and noraml class. May be important to distinguish these two classes**.
+
+ggplot(arrhythmia_clean, aes(x = Heart_rate_bpm, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2) 
+##+facet_wrap(~Arrhythmia_Class)
+###Many differences between classes. May be very important to differentiate between classes.*** (sinus bradycardy, supraventricular premature contraction, and left ventricular hypertrophy more.)
+table(arrhythmia_clean$Arrhythmia_Class, arrhythmia_clean$Heart_rate_bpm)
+ggplot(arrhythmia_clean, aes(x = Heart_rate_bpm, fill = Arrhythmia_Class)) + 
+  geom_histogram()
+ggplot(arrhythmia_clean, aes(x = Heart_rate_bpm, col = Arrhythmia_Class)) + 
+  geom_freqpoly()
+
+
+
+## Multivariate Analysis
+
+
+## Plot of all Average Duration between waves
+plot(arrhythmia_clean[, 6:10])
+ggplot(arrhythmia_clean, aes(x = Avg_QRS_duration_msec, col = "red")) + 
+  geom_density() +
+  geom_density(aes(x = Avg_duration_bet_onset_P_and_Q_waves_msec, col = "blue")) +
+  geom_density(aes(x = Avg_duration_bet_onset_Q_and_offset_T_waves_msec, col = "yellow")) + 
+  geom_density(aes(x = Avg_duration_bet_two_consecutive_T_waves_msec, col = "green")) + 
+  geom_density(aes(x = Avg_duration_bet_two_consecutive_P_waves_msec, col = "purple"))
+###See some overlaps
+
+## Plot of all Vector Angles.
+plot(arrhythmia_clean[, 11:15])
+ggplot(arrhythmia_clean, aes(x = Vector_angle_front_QRS_deg, col = "red")) + 
+  geom_density() +
+  geom_density(aes(x = Vector_angle_front_T_deg, col = "blue")) +
+  geom_density(aes(x = Vector_angle_front_P_deg, col = "yellow")) + 
+  geom_density(aes(x = Vector_angle_front_QRST_deg, col = "green")) + 
+  geom_density(aes(x = Vector_angle_front_J_deg, col = "purple"))
+#Shows difference in vector angles.
+
+
+
+# Dealing with Missing Values
+
+
+
+## Imputing for Missing Values using k-Nearest Neighbour algorithm
+##install.packages("DMwR")
+library(DMwR)
+### Setting seed for reproducible results
+set.seed(42)
+### Imputing for missing values with 25 neighbors,setting 'scale' parameter to FALSE and using medians because medians are more robust to outliers.
+arrhythmia_clean2 <- knnImputation(arrhythmia_clean, k = 25, scale = FALSE, meth = 'median')
+sum(is.na(arrhythmia_clean2))
+
+
+
+# Removing Zero-Variance or Near Zero Variance Attributes
+
+
+
+## Finding attributes with zero variance
+library(caret)
+near_zero_var_attributes <- nearZeroVar(arrhythmia_clean2, freqCut = 500/1, uniqueCut = 1, names = TRUE)
+near_zero_var_attributes
+length(near_zero_var_attributes) ### 17 attributes can be removed.
+##Removing attributes with zero variance
+arrhythmia_clean3 <- arrhythmia_clean2[, !(names(arrhythmia_clean2) %in% near_zero_var_attributes)]
+dim(arrhythmia_clean3) ###The datset has 452 observations and 263 attributes.
+
+
+
+# Checking for Normality
+
+
+
+## Because there are less than 2000 observations, the Shapiro test is used to check for normality in the continous variables.
+glimpse(arrhythmia_clean3)
+## Subsettting for the continous variables from the dataset
+arr_numeric <- arrhythmia_clean3[, 148:263]
+## Using the Shapiro test
+for (i in c(148:263)) {
+  print(shapiro.test(arrhythmia_clean3[, i]))
+}
+###The p-values are all less than 0.05, indicating that all these continous varibales are not normally distributed.
+
+
+
+# Correlation
+
+
+##str(arrhythmia_clean3)
+
+## Subsetting for Numeric Attributes in arrhythmia dataset
+library(dplyr)
+arrhythmia_num <- select_if(arrhythmia_clean3, is.numeric)
+##summary(arrhythmia_num)
+
+## Variances for Numeric Attributes
+num_var <- var(arrhythmia_num)
+##num_var
+
+## Correlation 
+arr_corr <- cor(arrhythmia_num, method = "spearman") ###There are standard deviations of 0.
+##arr_corr
+
+## Generating a correlation matrix with p-values (note: the first argument of 'rcorr' function required changing dataframe to a matrix) 
+##install.packages("Hmisc")
+library(Hmisc)
+arr_corr_matrix <- rcorr(as.matrix(arrhythmia_num), type = "spearman")
+arr_corr_matrix
+##arr_corr_matrix$r
+##arr_corr_matrix$P
+
+
+##install.packages("corrplot")
+library(corrplot)
+corrplot(arr_corr, method = "circle", type = "upper", order = "hclust", tl.col = "black", tl.cex = 0.1)
+##corrplot(arr_corr_matrix$r, type = "upper", order = "hclust", tl.col = "black", tl.cex = 0.1, p.mat = arr_corr_matrix$P, sig.level = 0.01, insig = "blank")
+##corrplot(arr_corr, method = "circle", type = "upper", tl.col = "black", tl.cex = 0.1)
+
+###Can see clusters of correlations among variables.
+
+
+
+#####################################################################################################################################
+# Working on all of the below
+
+
+
+#Balancing arrhythmia dataset 
+
+
+#Creating Training, Validation and Test sets
+
+##Separating arrhythmia_clean3 into Training and Test sets (9 Training sets : 1 Test set)
+##set.seed(42)
+
+##Creating a 10 fold Cross-Validation in Training Set (9 Training Sets and 1 Validaation Test)
+##library(caret)
+##arr_trainControl <- trainControl(method = "cv", number = 10, verboseIter = TRUE)
+
+
+
+#Feature Reduction - Feature Selection Methods for Arrhythmia Dataset
+
+##Filter-based : Information Gain
+##set.seed(42)
+##install.packages("FSelector")
+##library(FSelector)
+##weights <- information.gain()
+###Subsetting for top 25 features
+###Subsetting for top 10 features
+
+
+##Wrapper-based : Random Forest- Recursive Elimination
+##set.seed(42)
+##library(caret)
