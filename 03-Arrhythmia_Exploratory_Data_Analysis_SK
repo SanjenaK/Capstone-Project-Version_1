@@ -1,3 +1,7 @@
+# Exploratory Data Analysis for Arrhythmia Dataset
+
+
+
 # For Round 1 
 
 ## Packages to Install
@@ -2667,7 +2671,6 @@ sum(is.na(training1)) ### 0
 
 ## Load `caret` package
 library(caret)
-
 ## Find features with 0 variance
 near_zero_var_attributes <- nearZeroVar(training1, freqCut = 500/1, uniqueCut = 1, names = TRUE)
 near_zero_var_attributes
@@ -2754,7 +2757,7 @@ arr_corr_df_r <- data.frame(arr_corr_matrix$r)
 arr_corr_df_P <- data.frame(arr_corr_matrix$P)
 
 ### Plotting correlation plot
-library(arr_corr_matrix)
+library(corrplot)
 corrplot(arr_corr, method = "circle", type = "upper", order = "hclust", tl.col = "black", tl.cex = 0.1)
 ##corrplot(arr_corr_matrix$r, type = "upper", order = "hclust", tl.col = "black", tl.cex = 0.1,
 ##         p.mat = arr_corr_matrix$P, sig.level = 0.01, insig = "blank")
