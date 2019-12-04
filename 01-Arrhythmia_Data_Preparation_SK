@@ -1,0 +1,294 @@
+# Data Preprocessing for Arrhythmia dataset
+
+
+## Packages to Install
+##install.packages("dplyr")
+##install.packages("ggplot2")
+##install.packages("tidyr")
+##install.packages("plyr")
+
+
+
+# Data Preparation
+
+
+## Importing and loading the 'Arrhythmia' dataset from UCI <https://archive.ics.uci.edu/ml/datasets/Arrhythmia> :
+arrhythmia <- read.table("https://archive.ics.uci.edu/ml/machine-learning-databases/arrhythmia/arrhythmia.data", header = FALSE, sep = ",")
+##arrhythmia <- read.table("C:/Users/sanje/Desktop/CKME136/data/arrhythmia.data", header = FALSE, sep = ",")
+##arrhythmia <- read.table("C:/Users/Sanjena/My Documents/Ryerson 2019/CKME136/data/arrhythmia.data", header = FALSE, sep = ",")
+##arrhythmia_clean <- read.csv("C:/Users/sanje/Desktop/CKME136/data/arrhythmia_clean.csv", header = TRUE, sep = ",")
+
+## Date of data import
+dte <- Sys.Date()
+print(dte)
+
+
+
+## Overview of the imported dataset
+
+### To view more of our data in R:
+getOption("max.print")
+options("max.print" = 1000000)
+
+dim(arrhythmia)
+###There are 452 observations, 279 attributes and 1 class attribute.
+
+names(arrhythmia)
+###Need to rename the column names to be more informative.
+
+#str(arrhythmia)
+###Cannot see all of the attributes and so, will use `glimpse` from `dplyr` package.
+
+## Check the dataset, its structure, variables, datatypes and some observations, using glimpse from dplyr package.
+library(dplyr)
+glimpse(arrhythmia)
+###Here, it is seen that arrhythmia has 452 observations and 280 variables (1 variable for class labels).
+###All of the variables are of integer, factor and numeric classes. The data types need to be corrected later.
+###The variable names should be more informative.
+###There are '?' values that likely represent missing values.
+
+## Viewing head and tail of the dataset
+head(arrhythmia, 10)
+tail(arrhythmia, 10)   
+###There are many numerical values, many 0's, and the presence of '?' (e.g. in V14).
+
+## Closer look at the variables and their data types in the imported dataset
+arrhythmia_summary <- summary(arrhythmia)
+arrhythmia_summary
+###The first 10 variables are numeric but V9 is of integer type.
+###V2 has a minimum of 0 and maximum of 1 and could be a factor or boolean type.
+###V11 to V14 should be numeric like V10 since all of them contain vector angles. These variables have '?' values.
+###V15 is integer.
+###V16 to V21 show integer characteristics, except V20 shows no variations from 0.
+###V22 to V27 show logical types with minimum of 0 and maximum of 1.
+######The pattern from V16 to V27 repeats until V159. This is expected to repeat 12 times for measured variables for the 12 lead channels. 
+######V68, 70, 84, 132, 133, 140, 142, 144, 146, 152, 157, and 158 shows no variation from 0.
+###V160 to V169 are all of numeric types.
+######V160 to V169 pattern repeats until V279. This is expected to repeat 12 times for measured variables for the 12 lead channels. 
+######V165, 265, and 275 show no variation from 0.
+###V280 is integer type but makes more sense to be of factor type since this is the class attribute.
+
+
+
+## Assigning Correct Data Types, Appropriate Attribute Names and Replacing Missing Values with 'NA'
+
+### Inspecting the data types in the dataset
+int_var <- lapply(arrhythmia, is.integer)
+int_variables <- arrhythmia[0, (int_var == TRUE)]
+length(int_variables) ### 155
+
+num_var <- lapply(arrhythmia, is.numeric)
+num_variables <- arrhythmia[0, (num_var == TRUE)]
+length(num_variables) ### 275
+
+factor_var <- lapply(arrhythmia, is.factor)
+factor_variables <- arrhythmia[0, (factor_var == TRUE)]
+length(factor_variables) ### 5
+
+summary(arrhythmia[, 11:15]) 
+###These "Vector Angles in Degree" variables should be integers and would be later converted.
+
+logical_var <- lapply(arrhythmia, is.logical)
+logical_variables <- arrhythmia[0, (logical_var == TRUE)]
+length(logical_variables) 
+###There is 0 logical variables but there should be some logical variables in our dataset.
+
+
+### Renaming Attributes and Class Labels
+
+#### Relabel attributes with more informative variable names using authors' descriptions.
+attr_names <- c(c("Age_yr", "Sex", "Height_cm", "Weight_kg", "Avg_QRS_duration_msec", 
+                  "Avg_duration_bet_onset_P_and_Q_waves_msec", "Avg_duration_bet_onset_Q_and_offset_T_waves_msec", 
+                  "Avg_duration_bet_two_consecutive_T_waves_msec", "Avg_duration_bet_two_consecutive_P_waves_msec", 
+                  "Vector_angle_front_QRS_deg", "Vector_angle_front_T_deg", "Vector_angle_front_P_deg", 
+                  "Vector_angle_front_QRST_deg", "Vector_angle_front_J_deg", "Heart_rate_bpm"),
+                paste(c(rep("DI", 12), rep("DII", 12), rep("DIII", 12), rep("AVR", 12), rep("AVL", 12), rep("AVF", 12), 
+                        rep("V1", 12), rep("V2", 12), rep("V3", 12), rep("V4", 12), rep("V5", 12), rep("V6", 12)),
+                      rep(c("Avg_width_Q_wave_msec", "Avg_width_R_wave_msec", "Avg_width_S_wave_msec", 
+                            "Avg_width_R'_wave_msec", "Avg_width_S'_wave_msec", "No_intrinsic_deflections", 
+                            "Existence_diphasic_R_wave", "Existence_notched_R_wave", 
+                            "Existence_notched_P_wave", "Existence_diphasic_P_wave", 
+                            "Existence_notched_T_wave", "Existence_diphasic_T_wave"), 12), sep = "_"),
+                paste(c(rep("DI", 10), rep("DII", 10), rep("DIII", 10), rep("AVR", 10), rep("AVL", 10), rep("AVF", 10),
+                        rep("V1", 10), rep("V2", 10), rep("V3", 10), rep("V4", 10), rep("V5", 10), rep("V6", 10)),
+                      rep(c("J_point_depression_mV", "Amp_Q_wave_mV", "Amp_R_wave_mV", "Amp_S_wave_mV", 
+                            "Amp_R'_wave_mV", "Amp_S'_wave_mV", "Amp_P_wave_mV", "Amp_T_wave_mV", "QRSA", 
+                            "QRSTA"), 10), sep = "_"), 
+                "Arrhythmia_Class")
+
+names(arrhythmia) <- attr_names
+
+
+#### Renaming class labels and converting class from integer to categorical variable
+
+###The last "Arrhythmia_Class" column is the class attribute and should be a factor variable.
+str(arrhythmia$Arrhythmia_Class) ### integer
+summary(arrhythmia$Arrhythmia_Class)
+table(arrhythmia$Arrhythmia_Class)
+###There are no class 11, 12 and 13 groups, which were to be classified as "first_degree_atrioventricular_block", 
+###"second_degree_atrioventricular_block", and "third_degree_atrioventricular_block". Since there were no observations 
+###classifed to these three groups, atrioventricular block arrhythmia class labels were omitted for this dataset.
+
+arr_class_labels <- c("normal", "coronary_artery_disease", 
+                      "old_anterior_myocardial_infarction", "old_inferior_myocardial_infarction", 
+                      "sinus_tachycardy", "sinus_bradycardy", "ventricular_premature_contraction", 
+                      "supraventricular_premature_contraction", "left_bundle_branch_block", 
+                      "right_bundle_branch_block", "left_ventricule_hypertrophy", "atrial_fibrillation", 
+                      "other")
+arrhythmia$Arrhythmia_Class <- factor(arrhythmia$Arrhythmia_Class, labels = arr_class_labels, ordered = FALSE)
+
+##### Verify the class attribute names and data type.
+table(arrhythmia$Arrhythmia_Class)
+str(arrhythmia$Arrhythmia_Class) ### factor
+levels(arrhythmia$Arrhythmia_Class)
+
+
+### Check the renamed dataset
+glimpse(arrhythmia)
+str(arrhythmia)
+
+
+
+### Dealing With Apparent Missing Values
+
+
+###Earlier, '?' values were found in the dataset. This would be replaced with 'NA' for clarifying the 'missingness' in this dataset.
+
+#### Identify the number of missing values
+sum(is.na(arrhythmia)) ### 0
+sum(is.null(arrhythmia)) ### 0
+sum(arrhythmia == '?') ### 408
+408/(452*279) ### This is approximately 3.24% of the data.
+
+
+#### Columns with the missing values
+arrhythmia_na_col <- apply((arrhythmia == '?'), MARGIN = 2, FUN = sum)
+sum(arrhythmia_na_col) ### 408
+arrhythmia_na_col[arrhythmia_na_col!= 0]
+###Vector_angle_front_T_deg, Vector_angle_front_P_deg, Vector_angle_front_QRST_deg, Vector_angle_front_J_deg 
+###and Heart_rate_bpm (V11 to V15) have '?' values.
+
+###More info about the observation (Age, Heart rate and Class) with the missing 'Heart_rate_bpm' value:
+arrhythmia %>%
+  select(Age_yr, Heart_rate_bpm, Arrhythmia_Class) %>%
+  filter(Heart_rate_bpm == '?') ### 75 year-old with arrhythmia class 7.
+
+###Since V11 to V14 are logical variables and V15 is integer, these '?' can be replaced with 'NA'.
+
+
+#### Rows with the missing values
+arrhythmia_na_row <- apply((arrhythmia == '?'), MARGIN = 1, FUN = sum)
+sum(arrhythmia_na_row) ### 408
+##which(arrhythmia_na_row != 0)
+table(arrhythmia$Arrhythmia_Class[which(arrhythmia_na_row != 0)])
+###Observations in all classes have missing values.
+
+
+#### Replace '?' with NA
+arrhythmia[arrhythmia == '?'] <- NA
+which(arrhythmia == '?') ### 0
+sum(is.na(arrhythmia)) ### Confirms all '?' changed to NA
+
+
+
+### Check for Duplicated Rows
+anyDuplicated(arrhythmia) 
+###There are 0 duplicate observations.
+
+
+
+### Assigning Correct Attribute Data Types
+
+#### Convert 2nd variable: integer to factor type
+###Out of the first 15 attributes, only "Sex" is supposed to be a categorical variable.
+str(arrhythmia$Sex) ### integer
+
+arrhythmia$Sex <- factor(arrhythmia$Sex, labels = c("male", "female"), ordered = FALSE)
+
+#### Verify changed factor variable
+str(arrhythmia$Sex) ### factor
+arrhythmia$Sex[1:10]
+levels(arrhythmia$Sex)
+
+
+#### Convert 10th to 15th varibles: factor to integer types
+###The factor variables in the dataframe should be integers:
+###"Vector_angle..." variables (10th-14th): "Vector_angle_front_QRS_deg", 
+###"Vector_angle_front_T_deg", "Vector_angle_front_P_deg", 
+###"Vector_angle_front_QRST_deg" and "Vector_angle_front_J_deg".
+str(arrhythmia[, 10:14]) ### factor
+
+arrhythmia[, 10:14] <- as.integer(unlist(arrhythmia[, 10:14]))
+
+#### Verify changed data types
+str(arrhythmia[, 10:14]) ### integer
+summary(arrhythmia[, 10:14])
+
+###"Heart_rate_bpm" (15th) variable should also be integer.
+str(arrhythmia$Heart_rate_bpm) ### factor
+
+arrhythmia$Heart_rate_bpm <- as.integer(arrhythmia$Heart_rate_bpm)
+
+#### Verify changed data type
+str(arrhythmia$Heart_rate_bpm) ### integer
+summary(arrhythmia$Heart_rate_bpm)
+
+
+#### Convert integer to logical data types 
+###"Existence..." variables should be changed for all leads (DI through V6) to logical type:
+###"Existence_diphasic_R_wave", "Existence_notched_R_wave", "Existence_notched_P_wave", 
+###"Existence_diphasic_P_wave", "Existence_notched_T_wave" and "Existence_diphasic_T_wave".
+str(arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)]) ### integer
+summary(arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)])
+###These attributes' summaries show logical type characteristics, ranging from 0 to 1.
+###No variation in attributes can be researched and removed later.
+
+arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)] <- as.logical(
+  unlist(arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)]))
+
+#### Verify changed data types
+str(arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)]) ### logical
+summary(arrhythmia[ ,c(22:27, 34:39, 46:51, 58:63, 70:75, 82:87, 94:99, 106:111, 118:123, 130:135, 142:147, 154:159)])
+
+
+
+### Check the updated dataset and the number of integer, numeric, factor and logical variables 
+glimpse(arrhythmia) 
+
+int_var2 <- lapply(arrhythmia, is.integer)
+int_variables2 <- arrhythmia[0, (int_var2 == TRUE)]
+length(int_variables2) ### 86
+
+num_var2 <- lapply(arrhythmia, is.numeric)
+num_variables2 <- arrhythmia[0, (num_var2 == TRUE)]
+length(num_variables2) ### 206
+
+factor_var2 <- lapply(arrhythmia, is.factor)
+factor_variables2 <- arrhythmia[0, (factor_var2 == TRUE)]
+length(factor_variables2) ### 2
+
+logical_var2 <- lapply(arrhythmia, is.logical)
+logical_variables2 <- arrhythmia[0, (logical_var2 == TRUE)]
+length(logical_variables2) ### 72
+
+206+2+72 ### 280 variables.
+
+
+
+### Move the class attribute (280th) to the front of dataset for better visibility of classes.
+arrhythmia2 <- arrhythmia %>%
+  select(Arrhythmia_Class, everything())
+
+glimpse(arrhythmia2)
+
+
+
+## Saving cleaned arrhythmia dataset as arrhythmia_clean:
+arrhythmia_clean <- arrhythmia2
+
+glimpse(arrhythmia_clean)
+
+## Save and write cleaned arrhythmia dataset into a .csv file
+##write.csv(arrhythmia_clean, "C:/Users/sanje/Desktop/CKME136/data/arrhythmia_clean.csv", row.names = FALSE)
+##write.table(arrhythmia_clean, "C:/Users/sanje/Desktop/CKME136/data/arrhythmia_clean2", sep = ",", row.names = FALSE)
+
