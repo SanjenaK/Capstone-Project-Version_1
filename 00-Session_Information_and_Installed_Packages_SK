@@ -1,0 +1,33 @@
+# Session Information and Installed Packages
+
+#sessionInfo()
+#R version 3.6.0 (2019-04-26)
+#Platform: x86_64-w64-mingw32/x64 (64-bit)
+#Running under: Windows 10 x64 (build 17763)
+
+# Options Setting
+options("max.print" = 1000000)
+
+# Installed Packages
+##install.packages("dplyr")  ##dplyr_0.8.3
+##install.packages("ggplot2")  ##ggplot2_3.2.1
+##install.packages("caret")  ##caret_6.0-84
+##install.packages("DMwR")  ##DMwR_0.4.1
+##install.packages("Hmisc")  ##Hmisc_4.2-0
+##install.packages("corrplot")  ##corrplot_0.84
+##install.packages("FSelector")  ##FSelector_0.31
+## Install package for `AutoSpearman` from: https://awsm-research.github.io/Rnalytica/
+##install.packages('devtools')
+##devtools::install_github('software-analytics/Rnalytica')  ##Rnalytica_0.1.1
+##install.packages("plyr")  ##plyr_1.8.4
+##install.packages("UBL")  ##UBL_0.0.6
+##install.packages("tidyr")  ##tidyr_1.0.0
+##install.packages("effsize")  ##effsize_0.7.6
+##install.packages("pROC")  ##pROC_1.15.3
+
+
+# Attached base packages
+##grid, stats, graphics, grDevices, utils, datasets, methods, base
+# Other Attached packages
+##randomForest_4.6-14, automap_1.0-14, sp_1.3-1, gstat_2.0-3, MBA_0.0-9, Formula_1.2-3, 
+##survival_2.44-1.1, lattice_0.20-38
