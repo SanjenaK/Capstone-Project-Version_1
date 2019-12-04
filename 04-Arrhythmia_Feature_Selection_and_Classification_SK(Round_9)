@@ -1,0 +1,675 @@
+# Arrhythmia Feature Selection and Classifications (Round 9)
+
+## Install packages
+##install.packages("caret")
+##install.packages("ggplot2")
+##install.packages("DMwR")
+##install.packages("FSelector")
+## Install package for `AutoSpearman` from: https://awsm-research.github.io/Rnalytica/
+##install.packages('devtools')
+##devtools::install_github('software-analytics/Rnalytica')
+##install.packages("plyr")
+##install.packages("UBL")
+##install.packages("tidyr")
+
+
+
+# Partition arrhythmia_clean dataset into Training and Test Sets
+
+
+## Shuffle the dataset
+### Set seed
+set.seed(1673)
+### Sample row indices
+arr_rows9 <- sample(nrow(arrhythmia_clean))
+### Save new shuffled dataset
+shuffled_data9 <- arrhythmia_clean[arr_rows9, ]
+
+## Divide dataset into training and test sets, (70:30)
+### Set seed
+set.seed(1673)
+### Load library
+library(caret)
+### Check number of complete observations in dataset
+sum(complete.cases(shuffled_data9)) ### 68 cases
+###All data will be used to divide into training and test set because in the real-world some observations will also have missing values
+### Separate data in training and test sets
+inTrain9 <- createDataPartition(y = shuffled_data9$Arrhythmia_Class, p = 0.70, list = FALSE)
+training9 <- shuffled_data9[inTrain9,]
+test9 <- shuffled_data9[-inTrain9,]
+dim(training9) ###323 rows and 280 attributes 
+
+# Exploratory Data Analysis and Data Preprocessing
+glimpse(training9)
+head(training9)
+tail(training9)
+
+# Summary
+summary(training9)
+
+# Correlation
+
+# Variance
+
+# Univariate Analysis
+
+# Bivariate Analysis
+
+# Multivariate Analysis
+library(ggplot2)
+ggplot(training9, aes(x = Heart_rate_bpm, y = Avg_QRS_duration_msec)) +
+  geom_line() +
+  facet_wrap(~Arrhythmia_Class, ncol = 4)
+
+# Dealing with Missing Values
+
+## Check Missing Values
+sum(is.na(training9)) ###285 missing values
+missing_col9 <- colSums(is.na(training9))
+### Attributes with missing values
+missing_attr9 <- names(training9)[missing_col9 > 0]
+missing_attr9
+summary(training9[,missing_attr9])
+### Number of Missing Values in these attributes
+missing_attr_num9 <- missing_col9[missing_attr9]
+missing_attr_num9
+missing_attr_num9 / 452
+###3 attributes have less than 3% missing values and 1 attribute, Vector of angle front J, has approximately 59.1% missing values. 
+
+
+## Impute for Missing Values using k-Nearest Neighbour algorithm
+### Load `DMwR` package
+library(DMwR)
+### Set seed
+set.seed(1673)
+### Impute for missing values with 25 neighbors,setting 'scale' parameter to FALSE and using medians because medians are more robust to outliers.
+training9 <- knnImputation(training9, k = 25, scale = FALSE, meth = 'median')
+### Verify No Missing Values
+sum(is.na(training9)) ### 0
+summary(training9[, missing_attr9])
+
+
+
+# Removing Zero-Variance Variance Attributes
+
+## Load `caret` package
+library(caret)
+## Find attributes with zero variance
+zero_var_attr9 <- nearZeroVar(training9, freqCut = 500/1, uniqueCut = 1, names = TRUE)
+zero_var_attr9
+length(zero_var_attr9)
+###24 attributes can be removed
+
+## Remove features with zero variance
+training9 <- training9[, !(names(training9) %in% zero_var_attr9)]
+dim(training9) 
+###This datset has 323 observations and 256 attributes.
+
+
+
+# Feature Reduction - Feature Selection Methods for Arrhythmia Dataset
+
+
+# Filter-based : Information Gain
+
+## Set seed for reproducibility
+set.seed(1673)
+
+## Load library
+library(FSelector)
+
+## Use `information.gain` function from `FSelector` package and save output
+infogain_weights <- information.gain(Arrhythmia_Class~., training9)
+##names(infogain_weights)
+##str(infogain_weights)
+
+## Saving output as a dataframe 
+infogain_df <- data.frame(cbind(rownames(infogain_weights)), infogain_weights$attr_importance)
+infogain_df
+### Rename column names of infogain_df
+names(infogain_df) <- c("attribute", "attr_importance")
+str(infogain_df)
+### Order attribute importance in decreasing order
+infogain_df2 <- infogain_df[order(desc(infogain_df$attr_importance)),]
+infogain_df2
+
+## Attributes with more than 0.050 attr_importance
+infogain_0.050 <- infogain_df2[round(infogain_df2$attr_importance, 3) >= 0.050,]
+infogain_0.050
+nrow(infogain_0.050)
+###46 features selected
+
+## Attributes with more than 0.100 attr_importance
+infogain_0.100 <- infogain_df2[round(infogain_df2$attr_importance,3) >= 0.100,]
+infogain_0.100
+nrow(infogain_0.100) 
+###40 features selected
+
+## Attributes with more than 0.150 attr_importance
+infogain_0.150 <- infogain_df2[round(infogain_df2$attr_importance, 3) >= 0.150,]
+infogain_0.150
+nrow(infogain_0.150) 
+###11 features selected
+
+## Subset for top 50 features
+subset_50 <- infogain_df2[round(infogain_df2$attr_importance, 3) >= 0.033,]
+subset_50
+nrow(subset_50)
+
+## Subset for top 25 features
+subset_25a <- cutoff.k(infogain_weights, 25) 
+subset_25a
+###V2_Avg_width_Q_wave_msec (attribute importance of 0.125) was the last attribute to be included in this list
+### Subset for top 26 features
+subset_26 <- infogain_df2[round(infogain_df2$attr_importance, 4) >= 0.1253,]
+subset_26
+nrow(subset_26) ### 25th and 26th have same information gain
+
+## Subset for top 20 features
+subset_20 <- cutoff.k(infogain_weights, 20) 
+subset_20
+
+## Subset for top 15 features
+subset_15 <- cutoff.k(infogain_weights, 15) 
+subset_15
+
+## Subset for top 10 features
+subset_10 <- cutoff.k(infogain_weights, 10) 
+subset_10
+###Avg_QRS_duration_msec (attribute importance of 0.153) was the last attribute to be included in list
+
+### Plot information gain coefficients
+library(ggplot2)
+ggplot(subset_50, aes(x = 1:50, y = subset_50$attr_importance)) +
+  geom_line(col="slateblue", lwd = 1) +
+  geom_point()
+
+ggplot(subset_50, aes(x = 1:50, y = subset_50$attr_importance)) +
+  geom_line(col="slateblue", lwd = 1) +
+  geom_point() +
+  scale_y_continuous(limits= c(0, 1))
+###The plot shows the first 6 attributes are good to consider because there is a slight leveling after the 6th attribute. 
+###There are also less decreases after 10, 16, 36 and 41 variables.
+
+
+# Wrapper-based : Recursive Feature Elimination-Random Forest
+
+## Load library
+library(caret)
+
+## Set seed for reproducibility
+set.seed(1673)
+
+## Define control to use random forest selection function
+rfe_rf_control <- rfeControl(functions = rfFuncs, method = "cv", number = 10)
+
+## Subset sizes to find
+rfe_rf_subsets <- c(1:10, 15, 20, 25, 50, 100)
+
+## Set seed
+set.seed(1673)
+
+## Run recursive feature elimination using `rfe()` function
+rfe_rf_results <- rfe(training9[,-1], training9$Arrhythmia_Class, sizes = rfe_rf_subsets, rfeControl = rfe_rf_control)
+
+## Summary of results
+rfe_rf_results
+###It is observed that the accuracy increases up to 50 attributes, slightly decreasing from 8 to 9 and 10 to 15.
+###Then it decreases to 100 and 255 attributes.
+###rfe_rf_results$bestSubset
+###rfe_rf_results$optVariables
+
+## List of chosen features
+predictors(rfe_rf_results)
+
+## Plot of results
+plot(rfe_rf_results, type=c("g", "o"))
+
+## Save as dataframe 
+rfe_rf_results_df_50 <- data.frame(attribute=predictors(rfe_rf_results))
+rfe_rf_results_df_50
+
+## For subsets of 1:25 variables
+
+## Set seed for reproducibility
+set.seed(1673)
+
+## Subset sizes to find
+rfe_rf_subsets2 <- c(1:25)
+
+## Set seed
+set.seed(1673)
+
+## Run recursive feature elimination using `rfe()` function
+rfe_rf_results2 <- rfe(training9[,-1], training9$Arrhythmia_Class, sizes = rfe_rf_subsets2, rfeControl = rfe_rf_control)
+
+## Summary of results
+rfe_rf_results2 ###17 attributes.
+###The accuracies for the subsets increases with more variables, slightly decreasing from 8 to 9, 10 to 11, 12 to 13, 14 to 15, 17 to 21 and 24 to 25.
+###17 variable subsets has the best accuracy. This is reduced by about 4% for 255 variable subset.
+###rfe_rf_results2$bestSubset
+##rfe_rf_results2$optVariables
+
+## List of chosen features
+predictors(rfe_rf_results2)
+
+## Plot of results
+plot(rfe_rf_results2, type=c("g", "o"))
+
+## Save as dataframe 
+rfe_rf_results_df_17 <- data.frame(attribute=predictors(rfe_rf_results2))
+rfe_rf_results_df_17
+
+
+# Hybrid : AutoSpearman
+
+## Install package
+###from: https://awsm-research.github.io/Rnalytica/
+##install.packages('devtools')
+##devtools::install_github('software-analytics/Rnalytica')
+
+## Load `AutoSpearman` package
+library(Rnalytica)
+
+## Set seed for reproducibility
+set.seed(1673)
+
+## Prepare a numerical training dataset to compute Spearman correlation
+training_num <- sapply(training9, MARGIN = 2, FUN = as.numeric)
+class(training_num) ### matrix
+## Change training_num from a matrix to a dataframe
+training_num_df <- data.frame(training_num)
+str(training_num_df)
+## Save independent attributes' names for `metrics` parameter in `AutoSpearman` function
+indep_var_names <- names(training_num_df[-1])
+
+## Perform AutoSpearman from `Rnalytica` package
+
+### Using default threshold parameters: spearman.threshold = 0.7, vif.threshold = 5
+AutoSpear1 <- AutoSpearman(dataset = training_num_df, metrics = indep_var_names, spearman.threshold = 0.7, vif.threshold = 5, verbose = TRUE)
+AutoSpear1
+###109 attributes are selected
+### Saving output as dataframe
+a1 <- data.frame(attribute=AutoSpear1)
+###AutoSpearman changed all single quotes to period
+## Change "." back to "'"
+a1$attribute <- gsub("\\.", "\\'", a1$attribute)
+a1
+
+### Using vif.threshold = 3: spearman.threshold = 0.7, vif.threshold = 3
+AutoSpear2 <- AutoSpearman(dataset = training_num_df, metrics = indep_var_names, spearman.threshold = 0.7, vif.threshold = 3, verbose = TRUE)
+AutoSpear2
+### Saving output as dataframe
+a2 <- data.frame(attribute=AutoSpear2)
+## Change "." back to "'"
+a2$attribute <- gsub("\\.", "\\'", a2$attribute)
+a2
+###90 attributes are selected
+
+### Using spearman.threshold = 0.5 & vif.threshold = 3: spearman.threshold = 0.5, vif.threshold = 3
+AutoSpear3 <- AutoSpearman(dataset = training_num_df, metrics = indep_var_names, spearman.threshold = 0.5, vif.threshold = 3, verbose = TRUE)
+AutoSpear3
+###82 attributes are selected
+### Saving output as dataframe
+a3 <- data.frame(attribute=AutoSpear3)
+## Change "." back to "'"
+a3$attribute <- gsub("\\.", "\\'", a3$attribute)
+a3
+
+### Using spearman.threshold = 0.5 & vif.threshold = 2: spearman.threshold = 0.5, vif.threshold = 2
+AutoSpear4 <-AutoSpearman(dataset = training_num_df, metrics = indep_var_names, spearman.threshold = 0.5, vif.threshold = 2, verbose = TRUE)
+AutoSpear4 ##71 variables
+### Saving output as dataframe
+a4 <- data.frame(attribute=AutoSpear4)
+###AutoSpearman changed all single quotes to period
+## Change "." back to "'"
+a4$attribute <- gsub("\\.", "\\'", a4$attribute)
+a4
+
+### Using spearman.threshold = 0.3 & vif.threshold = 2: spearman.threshold = 0.3, vif.threshold = 2
+AutoSpear5 <-AutoSpearman(dataset = training_num_df, metrics = indep_var_names, spearman.threshold = 0.3, vif.threshold = 2, verbose = TRUE)
+AutoSpear5 ###52 variables
+### Saving output as dataframe
+a5 <- data.frame(attribute=AutoSpear5)
+###AutoSpearman changed all single quotes to period
+## Change "." back to "'"
+a5$attribute <- gsub("\\.", "\\'", a5$attribute)
+a5
+
+
+# Selecting Feature Subset
+
+## Load `plyr` package
+library(plyr)
+
+## Join attributes from 3 feature selection techniques
+
+### Using 50 variables in IG and RFE-RF subsets and 107 variables in AS subset
+
+#### Find common variables using InfoGain and RFE-RF
+attr_ig_rfe <- join(subset_50, rfe_rf_results_df_50, by = "attribute", type = "inner")
+attr_ig_rfe
+#### Find common attributes using InfoGain and AutoSpearman
+attr_ig_as <- join(subset_50, a1, by = "attribute", type = "inner")
+attr_ig_as
+#### Find common variables using RFE-RF and AutoSpearman
+attr_as_rfe <- join(a1, rfe_rf_results_df_50, by = "attribute", type = "inner")
+attr_as_rfe
+#### Find common variables using all Feature Selection Methods
+attr_as_ig_rfe <- join(attr_as_rfe, attr_ig_as, by = "attribute", type = "inner")
+attr_as_ig_rfe
+
+### Using 25 variables in IG subset and 17 variables in RFE-RF subset and 109 variables in AS subset
+
+#### Find common variables using InfoGain and RFE-RF
+attr_ig_rfe2 <- join(subset_25, rfe_rf_results_df_17, by = "attribute", type = "inner")
+attr_ig_rfe2
+#### Find common attributes using InfoGain and AutoSpearman
+attr_ig_as2 <- join(subset_25, a1, by = "attribute", type = "inner")
+attr_ig_as2
+#### Find common variables using RFE-RF and AutoSpearman
+attr_as_rfe2 <- join(a1, rfe_rf_results_df_17, by = "attribute", type = "inner")
+attr_as_rfe2
+#### Find common variables using all Feature Selection Methods
+attr_as_ig_rfe2 <- join(attr_as_rfe2, attr_ig_as2, by = "attribute", type = "inner")
+attr_as_ig_rfe2
+
+
+
+# Balancing arrhythmia dataset using SMOTE
+
+
+## Count samples in classes in Arrythmia_Class
+table(training9$Arrhythmia_Class)
+prop.table(table(training9$Arrhythmia_Class))
+
+## Load `UBL` package for `SmoteClassif` function
+library(UBL)
+
+## Set seed
+set.seed(1673)
+
+## Perform SMOTE to undersample 'normal' class by 0.875 times and oversample all minority classes with a maximum 20 times
+training_smote9 <- SmoteClassif(Arrhythmia_Class~., training9, 
+                               C.perc = list(normal=0.875, coronary_artery_disease=3.3, 
+                                             old_anterior_myocardial_infarction=9.2, old_inferior_myocardial_infarction=9.2, 
+                                             sinus_tachycardy=9, sinus_bradycardy=7, ventricular_premature_contraction=20, 
+                                             supraventricular_premature_contraction=20, left_bundle_branch_block=13, 
+                                             right_bundle_branch_block=3, left_ventricule_hypertrophy=20, 
+                                             atrial_fibrillation=18, other=7), k = 1, dist = "HEOM")
+dim(training_smote9)
+###This results in a dataset with 1210 rows and 256 columns.
+table(training_smote9$Arrhythmia_Class)
+###This gives 150 samples in 'normal' class.  
+###Using a maximum of oversampling by 20 times prevents generating 
+###unneccessary copies of classes with originally less than 4 samples.
+###k = 1 because the smallest class 
+###'supraventricular_premature_contraction' has 2 samples and k has to be less than that. 
+###A distance metric for nominal and numeric features was used, a heterogenous distance metric, 'HEOM.'
+
+## Check balanced dataset
+prop.table(table(training_smote9$Arrhythmia_Class))
+anyDuplicated(training_smote9) ### 0
+
+
+# Feature Subset on training_smote
+## Subset training_smote data to include only features from feature subset
+### Using all feature selection techniques generating 18 attributes and the class in a subset
+training_data9 <- training_smote9[, c("Arrhythmia_Class", "Heart_rate_bpm", "DII_No_intrinsic_deflections",
+                                      "AVF_Avg_width_Q_wave_msec", "V1_No_intrinsic_deflections", "V3_Avg_width_Q_wave_msec",
+                                      "V3_No_intrinsic_deflections", "V1_Amp_T_wave_mV", "V3_Amp_R_wave_mV", 
+                                      "V4_Amp_T_wave_mV", "V1_Avg_width_S_wave_msec", "Avg_duration_bet_onset_Q_and_offset_T_waves_msec",
+                                      "DI_Avg_width_S_wave_msec", "Avg_duration_bet_two_consecutive_T_waves_msec", "V1_QRSA", 
+                                      "DI_Amp_T_wave_mV", "V6_Amp_T_wave_mV", "AVR_Amp_T_wave_mV", "Avg_QRS_duration_msec")]
+dim(training_data9) ###1210 rows and 19 columns
+glimpse(training_data9)
+
+
+
+# Machine Learning - Supervised Learning - Multiclass Classsifcation Methods
+
+
+# Creating 10-Fold Cross Validation training control
+
+## Separating arrhythmia_smote into Training and Validation Sets
+
+### Set seed for reproducible results 
+set.seed(1673)
+
+### Define training control for models to use : 10-Fold Cross-Validation
+trainControl <- trainControl(method = "cv",  #cross-validation
+                             number = 10,  #using 10 folds
+                             verboseIter = TRUE,
+                             summaryFunction = multiClassSummary)  #multiclass distribution
+
+
+# Training Classification Models
+
+## Naive Bayes classificaton model
+model_nb <- train(Arrhythmia_Class ~ ., 
+                  data = training_data9, 
+                  method = "nb",
+                  trControl = trainControl)
+
+### Summary of results
+print(model_nb)
+results_nb9 <- model_nb$resample
+results_nb9
+nb_final_model9 <- model_nb$finalModel
+str(nb_final_model9)
+plot(model_nb)
+
+
+## k-Nearest Neighbors classificaton model
+model_knn <- train(Arrhythmia_Class ~ ., 
+                   data = training_data9, 
+                   method = "knn",
+                   trControl = trainControl)
+
+### Summary of results
+print(model_knn)
+results_knn9 <- model_knn$resample
+results_knn9
+knn_final_model9 <- model_knn$finalModel
+str(knn_final_model9)
+plot(model_knn)
+
+
+## Random Forest classfication model
+model_rf <- train(Arrhythmia_Class ~ ., 
+                  data = training_data9,
+                  method = "rf",
+                  trControl = trainControl)
+
+### Summary of results
+print(model_rf)
+##str(model_rf)
+results_rf9 <- model_rf$resample
+results_rf9
+rf_final_model9 <- model_rf$finalModel
+str(rf_final_model9)
+plot(model_rf)
+
+
+## Compare Classification Accuracies of Models
+plot(results_nb9$Accuracy, results_knn9$Accuracy)
+plot(results_nb9$Accuracy, results_rf9$Accuracy)
+plot(results_knn9$Accuracy, results_rf9$Accuracy)
+###All three algorithms' predictions are not related linearly.
+
+
+# Predictions of 3 Classification Models on Test Set
+
+## Prepare Test set
+### Check Missing Values
+sum(is.na(test9)) ###123 missing values
+missing_test_col9 <- colSums(is.na(test9))
+### Attributes with missing values
+missing_test_attr9 <- names(test9)[missing_test_col9 > 0]
+missing_test_attr9 ###4 attributes with missing values are not included in feature selected subset for classfication
+
+## Subset test set to include only features from feature subset
+## Using all feature selection techniques generating 18 attributes and the class from test set
+test_data9 <- test9[, c("Arrhythmia_Class", "Heart_rate_bpm", "DII_No_intrinsic_deflections",
+                        "AVF_Avg_width_Q_wave_msec", "V1_No_intrinsic_deflections", "V3_Avg_width_Q_wave_msec",
+                        "V3_No_intrinsic_deflections", "V1_Amp_T_wave_mV", "V3_Amp_R_wave_mV", 
+                        "V4_Amp_T_wave_mV", "V1_Avg_width_S_wave_msec", "Avg_duration_bet_onset_Q_and_offset_T_waves_msec",
+                        "DI_Avg_width_S_wave_msec", "Avg_duration_bet_two_consecutive_T_waves_msec", "V1_QRSA", 
+                        "DI_Amp_T_wave_mV", "V6_Amp_T_wave_mV", "AVR_Amp_T_wave_mV", "Avg_QRS_duration_msec")]
+
+dim(test_data9) ### 129 rows and 19 columns
+sum(is.na(test_data9)) ### The are no missing values in these attributes.
+
+## Predict on Test Set
+
+### Naive Bayes
+predictions_nb9 <- predict(model_nb, test_data9[,-1])
+predictions_nb9
+
+### k-Nearest Neighbors
+predictions_knn9 <- predict(model_knn, test_data9[,-1])
+predictions_knn9
+
+### Random Forest
+predictions_rf9 <- predict(model_rf, test_data9[,-1])
+predictions_rf9
+
+
+## Confusion Matrices
+
+### Load `tidyr` to reshape confusion matrices
+library(tidyr)
+
+### Naive Bayes
+confMat_nb9 <- confusionMatrix(predictions_nb9, test_data9$Arrhythmia_Class)
+confMat_nb9
+str(confMat_nb9$table)
+confMat_nb9_df <- data.frame(confMat_nb9$table)
+confMat_nb9_df2 <- spread(confMat_nb9_df, "Reference", "Freq")
+
+### k-Nearest Neighbors
+confMat_knn9 <- confusionMatrix(predictions_knn9, test_data9$Arrhythmia_Class)
+confMat_knn9
+str(confMat_knn9$table)
+confMat_knn9_df <- data.frame(confMat_knn9$table)
+confMat_knn9_df2 <- spread(confMat_knn9_df, "Reference", "Freq")
+
+### Random Forest
+confMat_rf9 <- confusionMatrix(predictions_rf9, test_data9$Arrhythmia_Class)
+confMat_rf9
+str(confMat_rf9$table)
+confMat_rf9_df <- data.frame(confMat_rf9$table)
+confMat_rf9_df2 <- spread(confMat_rf9_df, "Reference", "Freq")
+
+
+
+# Building Heterogenous Stacking Ensemble Classification Model
+
+## Loading library
+library(caret)
+
+## Set seed
+set.seed(1673)
+
+## Split training data with selected features and with SMOTE into training and validation sets (50:50)
+inTrain9a <- createDataPartition(y = training_data9$Arrhythmia_Class, p = 0.50, list = FALSE)
+train9 <- training_data9[inTrain9a,]
+valid9 <- training_data9[-inTrain9a,]
+dim(train9) 
+dim(valid9) 
+ytrain9 <- train9$Arrhythmia_Class
+yvalid9 <- valid9$Arrhythmia_Class
+
+## Specify and fit base models
+### Define training control for models to use : 10-Fold Cross-Validation
+trainControl <- trainControl(method = "cv",  #cross-validation
+                             number = 10,  #using 10 folds
+                             verboseIter = TRUE,
+                             summaryFunction = multiClassSummary)  #multiclass distribution
+### Train base models
+#### Naive Bayes
+model_base_nb9 <- train(Arrhythmia_Class ~ ., 
+                        data = train9, 
+                        method = "nb",
+                        trControl = trainControl)
+print(model_base_nb9)
+results_model_base_nb9 <- model_base_nb9$resample
+results_model_base_nb9
+model_base_final_model_nb9 <- model_base_nb9$finalModel
+model_base_final_model_nb9
+
+#### k-Nearest Neighbors
+model_base_knn9 <- train(Arrhythmia_Class ~ ., 
+                         data = train9, 
+                         method = "knn",
+                         trControl = trainControl)
+print(model_base_knn9)
+###k=5
+results_model_base_knn9 <- model_base_knn9$resample
+results_model_base_knn9
+model_base_final_model_knn9 <- model_base_knn9$finalModel
+model_base_final_model_knn9
+
+#### Random Forest
+model_base_rf9 <- train(Arrhythmia_Class ~ ., 
+                        data = train9, 
+                        method = "rf",
+                        trControl = trainControl)
+print(model_base_rf9)
+###mtry=2
+results_model_base_rf9 <- model_base_rf9$resample
+results_model_base_rf9
+model_base_final_model_rf9 <- model_base_rf9$finalModel
+model_base_final_model_rf9
+
+### Plot accuracies of base models
+plot(results_model_base_nb9$Accuracy, results_model_base_knn9$Accuracy, ylim = c(0.5, 1), xlim = c(0.5, 1), xlab = "Accuracy of NB Model",  ylab = "Accuracy of kNN Model", main = "Accuracies of kNN vs. NB Models")
+abline(0, 1, col="blue", lty=2)
+plot(results_model_base_nb9$Accuracy, results_model_base_rf9$Accuracy, ylim = c(0.5, 1), xlim = c(0.5, 1), xlab = "Accuracy of NB Model",  ylab = "Accuracy of RF Model", main = "Accuracies of NB vs. RF Models")
+abline(0, 1, col="blue", lty=2)
+plot(results_model_base_knn9$Accuracy, results_model_base_rf9$Accuracy, ylim = c(0.5, 1), xlim = c(0.5, 1),  xlab = "Accuracy of kNN Model", ylab = "Accuracy of RF Model", main = "Accuracies of kNN vs. RF Models")
+abline(0, 1, col="blue", lty=2)
+###No consisent points on line.
+
+
+## Predict on validation set
+preds_nb9 <- predict(model_base_nb9, valid9[,-1])
+preds_knn9 <- predict(model_base_knn9, valid9[,-1])
+preds_rf9 <- predict(model_base_rf9, valid9[,-1])
+## Predict on test set
+test_preds_nb9 <- predict(model_base_nb9, test_data9[,-1])
+test_preds_knn9 <- predict(model_base_knn9, test_data9[,-1])
+test_preds_rf9 <- predict(model_base_rf9, test_data9[,-1])
+
+## Create a dataset for valid and test predictions via stacking predicitions
+stacked_predictions9 <- data.frame(cbind(preds_nb9, preds_knn9, preds_rf9))
+stacked_test_predictions9 <- data.frame(cbind(preds_nb9=test_preds_nb9, preds_knn9=test_preds_knn9, preds_rf9=test_preds_rf9))
+
+
+## Set seed
+set.seed(1673)
+
+## Specify and fit a meta model on stacked_predictions
+meta_model9 <- train(stacked_predictions9, yvalid9, 
+                     method = "rf",
+                     trControl = trainControl)
+
+print(meta_model9)
+###mtry=2
+results_meta_model9 <- meta_model9$resample
+results_meta_model9
+meta_model_final_model9 <- meta_model9$finalModel
+meta_model_final_model9
+
+
+## Make predictions on stacked predictions of test data
+final_predictions9 <- predict(meta_model9, stacked_test_predictions9)
+
+
+## Confusion Matrix for Ensembler
+confMat_ensembler9 <- confusionMatrix(final_predictions9, test_data9$Arrhythmia_Class)
+confMat_ensembler9
+str(confMat_ensembler9$table)
+confMat_ensembler9_df <- data.frame(confMat_ensembler9$table)
+confMat_ensembler9_df2 <- spread(confMat_ensembler9_df, "Reference", "Freq")
+print(confMat_ensembler9)
