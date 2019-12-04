@@ -49,7 +49,6 @@ tail(training6)
 summary(training6)
 
 
-
 # Dealing with Missing Values
 
 ## Check Missing Values
