@@ -1,13 +1,12 @@
 # Analysis on Prediction Algorithms for Arrhythmia Dataset
 
-
-
-# Effect Sizes
-
-
 ## Install Packages
 ##install.packages("effsize")
 ##install.packages("pROC")
+
+
+
+# Effect Sizes
 
 ## Load the library
 library(effsize)
