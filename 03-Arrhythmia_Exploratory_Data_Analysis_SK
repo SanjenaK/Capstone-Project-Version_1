@@ -1,0 +1,2763 @@
+# For Round 1 
+
+## Packages to Install
+##install.packages("ggplot2")
+##install.packages("caret")
+##install.packages("DMwR")
+##install.packages("Hmisc")
+##install.packages("corrplot")
+
+
+
+# Partition cleaned arrhythmia data into training and test sets
+## Set Seed
+set.seed(42)
+## Shuffle the dataset
+arr_rows1 <- sample(nrow(arrhythmia_clean))
+shuffled_data1 <- arrhythmia_clean[arr_rows1, ]
+## Loading the library
+library(caret)
+## Set Seed
+set.seed(42)
+## Check number of complete observations in dataset
+sum(complete.cases(shuffled_data1)) ### 68 cases
+###All data will be used to divide into training and test set because in the real-world some observations will also have missing values
+## Separate dataset into training and test sets, (70:30)
+inTrain1 <- createDataPartition(y = shuffled_data1$Arrhythmia_Class, p = 0.70, list = FALSE)
+training1 <- shuffled_data1[inTrain1,]
+test1 <- shuffled_data1[-inTrain1,]
+dim(training1) ###323 rows and 280 attributes 
+
+
+
+# Exploratory Analysis and Data Preprocessing
+
+## Overview
+
+## Check training data
+glimpse(training1)
+
+## Quantitative Analysis
+### Find numeric attributes
+training1_num <- training1[, which(lapply(training1, is.numeric) == TRUE)]
+dim(training1_num) ### 323 rows and 206 columns
+### Summary Statistics
+summary(training1_num)
+###Shows some attributes have zero-variance. Height_cm has an abnormally large maximum value of 780.0cm and should probably be corrected.
+
+## Qualitative Analysis
+### Find categorical attributes
+training1_cat <- training1[, which(lapply(training1, is.numeric) != TRUE)]
+dim(training1_cat) ### 323 rows and 74 columns
+### Summary Statistics
+summary(training1_cat)
+###Many attributes have zero-variance.
+
+
+## Univariate Analysis
+
+###Load the library
+library(ggplot2)
+
+### Class Attribute: Arrhythmia_Class
+
+summary(training1$Arrhythmia_Class)
+
+arr_class_table <- table(training1$Arrhythmia_Class)
+arr_class_table
+arr_class_freq <- prop.table(arr_class_table)
+arr_class_freq
+
+#### Histogram
+cl_col <- c("#CC5599", "#CC0066", "#CC3333", "#993300", "#CC0099", "#6600CC", "#3399FF", "#333CCC", "#990066", "#330099", "#CC0033", "#CC00CC", "#000066")
+ggplot(training1, aes(x = Arrhythmia_Class)) +
+  geom_bar(fill = cl_col, col = cl_col) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+##coord_flip()
+###It is evident that there is class imbalance in this dataset.
+
+
+#### Proportion of Observations in Each Class
+ggplot(training1, aes(x = Arrhythmia_Class, y = ..count../sum(..count..))) + 
+  geom_bar(fill = cl_col, col = cl_col) +
+  scale_y_continuous(limits = c(0, 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylab("Proportion") +
+  ggtitle("Proportion of Observations in Each Class")+
+  xlab(NULL)
+###Approximately 53% of the data belong to "normal" class.
+###Less than 10%  make up the rest of the classes. 
+
+
+# Age_yr
+#To choose binwidth for histogram with intervals of 5 years.
+age_bw <- (max(training1$Age_yr) - min(training1$Age_yr) ) / 17
+
+ggplot(training1, aes(x = Age_yr)) + 
+  geom_histogram(binwidth = age_bw, col = "#3366FF", fill = "#3366FF", alpha = 0.2) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Age")+
+  xlab("Age (year)")
+
+summary(training1$Age_yr)   ###Subjects were from 0 to 83  years old.
+
+ggplot(training1, aes(y = Age_yr)) + 
+  geom_boxplot(fill = "#66CCFF", alpha = 0.5) +
+  ylab("Age (year)") +
+  ggtitle("Boxplot for Age")
+
+### Looking into outliers:
+training1[training1$Age_yr < 3, 1:2]
+###Outlier represents infant 1 with sinus_tachycardy.
+
+
+
+# Sex
+summary(training1$Sex)
+ggplot(training1, aes(x = Sex, col = Sex, fill = Sex)) + 
+  geom_bar(alpha = 0.5)
+table(training1$Sex) ###Roughly similar in dataset.
+
+
+# Height_cm
+summary(training1$Height_cm)
+ggplot(training1, aes(y = Height_cm)) + 
+  geom_boxplot()
+###Should replace last outlier because it is unlikely for human height to be above 600cm and therefore, is likely to be a mistake.
+training1$Age_yr[training1$Height_cm > 600] 
+###Age for this outlier is 1. It makes more sense if an extra 0 was added by mistake. 
+###Thus, can replace the value with value/10.
+## Replacing outlier with more plausiable value
+for (i in 1:nrow(training1)) {
+  if (training1$Height_cm[i] > 600) {
+    training1$Height_cm[i] <- training1$Height_cm[i] / 10
+  }
+}
+## Verifying replacment
+training1$Age_yr[training1$Height_cm > 600]
+
+summary(training1$Height_cm)
+## Boxplot
+ggplot(training1, aes(y = Height_cm)) + 
+  geom_boxplot(fill = "#66CCFF", alpha = 0.5) +
+  ylab("Height (cm)") +
+  ggtitle("Boxplot for Height")
+###There are heights under 150cm.
+
+## Histogram
+ggplot(training1, aes(x = Height_cm)) + 
+  geom_histogram(bins = 25, col = "#3366FF", fill = "#3366FF", alpha = 0.2) +  
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Height")+
+  xlab("Height (cm)")
+
+
+# Weight_kg
+summary(training1$Weight_kg)
+## Boxplot
+ggplot(training1, aes(y = Weight_kg)) + 
+  geom_boxplot(fill = "#66CCFF", alpha = 0.5) +
+  ylab("Weight (cm)") +
+  ggtitle("Boxplot for Weight")
+###The outliers make sense when considering the range of age for patients in this dataset.
+ggplot(training1, aes(x = Weight_kg)) + 
+  geom_histogram(bins = 25, col = "#3366FF", fill = "#3366FF", alpha = 0.2) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Weight")+
+  xlab("Weight (kg)")
+###Fairly normally distributed
+
+
+# Average QRS duration (msec.)
+summary(training1$Avg_QRS_duration_msec)
+## Boxplot
+ggplot(training1, aes(y = Avg_QRS_duration_msec)) +
+  geom_boxplot(fill = "#66CCFF", alpha = 0.5) +
+  ylab("Average QRS duration (msec.)") +
+  ggtitle("Boxplot for Average QRS duration")
+## Histogram
+ggplot(training1, aes(x = Avg_QRS_duration_msec)) + 
+  geom_histogram(bins = 30, col = "#3366FF", fill = "#3366FF", alpha = 0.2) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Average QRS duration")+
+  xlab("Average QRS duration (msec.)")
+####Skewed to the right.
+## Outliers
+boxplot.stats(training1$Avg_QRS_duration_msec)$stats
+boxplot.stats(training1$Avg_QRS_duration_msec)$out
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Avg_QRS_duration_msec) %>%
+  filter(Avg_QRS_duration_msec > 114)
+###7 LBBB, 6 RBBB cases and 1 AFib 
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Avg_QRS_duration_msec) %>%
+  filter(Avg_QRS_duration_msec < 61)
+###1 normal 
+
+#Average Duration Between Onset of P and Q waves (msec.)
+summary(training1$Avg_duration_bet_onset_P_and_Q_waves_msec)
+## Boxplot
+ggplot(training1, aes(y = Avg_duration_bet_onset_P_and_Q_waves_msec)) +
+  geom_boxplot(fill = "#66CCFF", alpha = 0.5) +
+  ylab("Average Duration Between Onset P and Q waves (msec.)") +
+  ggtitle("Boxplot for Average Duration Between Onset P and Q waves")
+###Outliers at 0 and above 500.
+## Histogram
+ggplot(training1, aes(x = Avg_duration_bet_onset_P_and_Q_waves_msec)) + 
+  geom_histogram(bins = 50, col = "#3366FF", fill = "#3366FF", alpha = 0.2) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Average Duration Between Onset P and Q waves")+
+  xlab("Average Duration Between Onset P and Q waves (msec.)")
+###More normal distribution. Right-skewness.
+
+## Outliers
+boxplot.stats(training1$Avg_duration_bet_onset_P_and_Q_waves_msec)$stats
+boxplot.stats(training1$Avg_duration_bet_onset_P_and_Q_waves_msec)$out
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_onset_P_and_Q_waves_msec) %>%
+  filter(Avg_duration_bet_onset_P_and_Q_waves_msec > 224)
+###5 normal and 1 sinus bradycardy.
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_onset_P_and_Q_waves_msec) %>%
+  filter(Avg_duration_bet_onset_P_and_Q_waves_msec < 103)
+###0's. 2 CAD, 4 AFib, 2 RBBB, 1 sinus bradycardy, 3 normal and 1 other.
+
+
+#Average Duration Between Onset of Q and Offset of T waves (msec.)
+summary(training1$Avg_duration_bet_onset_Q_and_offset_T_waves_msec)
+ggplot(training1, aes(y = Avg_duration_bet_onset_Q_and_offset_T_waves_msec)) +
+  geom_boxplot(fill = "#66CCFF", alpha = 0.5) +
+  ylab("Average Duration Between Onset P and Offset T waves (msec.)") +
+  ggtitle("Boxplot for Average Duration Between Onset P and Offset T waves")
+## Histogram
+ggplot(training1, aes(x = Avg_duration_bet_onset_Q_and_offset_T_waves_msec)) + 
+  geom_histogram(bins = 30, col = "#3366FF", fill = "#3366FF", alpha = 0.2) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Average Duration Between Onset P and Offset T waves")+
+  xlab("Average Duration Between Onset P and Offset T waves (msec.)")
+## Outliers
+boxplot.stats(training1$Avg_duration_bet_onset_Q_and_offset_T_waves_msec)$stats
+boxplot.stats(training1$Avg_duration_bet_onset_Q_and_offset_T_waves_msec)$out
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_onset_Q_and_offset_T_waves_msec) %>%
+  filter(Avg_duration_bet_onset_Q_and_offset_T_waves_msec > 434)
+###4 LBBB, 1 RBBB, 2 CAD, 1 sinus bradycardy and 1 normal
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_onset_Q_and_offset_T_waves_msec) %>%
+  filter(Avg_duration_bet_onset_Q_and_offset_T_waves_msec < 301)
+### 2 sinus tachycardy, 2 normal, 1 CAD, 2 OAMI and 1 AFib. 
+
+
+#Average Duration Between Two Consecutive T waves (msec.)
+summary(training1$Avg_duration_bet_two_consecutive_T_waves_msec)
+## Boxplot
+ggplot(training1, aes(y = Avg_duration_bet_two_consecutive_T_waves_msec)) +
+  geom_boxplot(fill = "#66CCFF", alpha = 0.5) +
+  ylab("Average Duration Between Two Consecutive T waves (msec.)") +
+  ggtitle("Boxplot for Average Duration Between Two Consecutive T waves")
+## Histogram
+ggplot(training1, aes(x = Avg_duration_bet_two_consecutive_T_waves_msec)) + 
+  geom_histogram(bins = 30, col = "#3366FF", fill = "#3366FF", alpha = 0.2) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Average Duration Between Two Consecutive T waves")+
+  xlab("Average Duration Between Two Consecutive T waves (msec.)")
+####Skewed to the right
+## Outliers
+boxplot.stats(training1$Avg_duration_bet_two_consecutive_T_waves_msec)$stats
+boxplot.stats(training1$Avg_duration_bet_two_consecutive_T_waves_msec)$out
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_two_consecutive_T_waves_msec) %>%
+  filter(Avg_duration_bet_two_consecutive_T_waves_msec > 231)
+###10 CAD, 6 LBBB, 1 RBBB, 1 OIMI, 2 OAMI, 1 sinus tachycardy, 4 normal and 1 other.
+
+
+#Average Duration Between Two Consecutive P waves (msec.)
+summary(training1$Avg_duration_bet_two_consecutive_P_waves_msec)
+## Boxplot
+ggplot(training1, aes(y = Avg_duration_bet_two_consecutive_P_waves_msec)) +
+  geom_boxplot(fill = "#66CCFF", alpha = 0.5) +
+  ylab("Average Duration Between Two Consecutive P waves (msec.)") +
+  ggtitle("Boxplot for Average Duration Between Two Consecutive P waves")
+## Histogram
+ggplot(training1, aes(x = Avg_duration_bet_two_consecutive_P_waves_msec)) + 
+  geom_histogram(bins = 30, col = "#3366FF", fill = "#3366FF", alpha = 0.2) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Average Duration Between Two Consecutive P waves")+
+  xlab("Average Duration Between Two Consecutive P waves (msec.)")
+###Fairly normally distributed.
+## Outliers
+boxplot.stats(training1$Avg_duration_bet_two_consecutive_P_waves_msec)$stats
+boxplot.stats(training1$Avg_duration_bet_two_consecutive_P_waves_msec)$out
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_two_consecutive_P_waves_msec) %>%
+  filter(Avg_duration_bet_two_consecutive_P_waves_msec > 139)
+###7 normal and 1 OAMI.
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Avg_duration_bet_two_consecutive_P_waves_msec) %>%
+  filter(Avg_duration_bet_two_consecutive_P_waves_msec < 51)
+###2 sinus bradycardy, 3 CAD, 1 RBBB, 4 AFib, 2 normal and 1 other.
+
+
+#Vector Angle on Front of QRS (degree)
+summary(training1$Vector_angle_front_QRS_deg)
+## Boxplot
+ggplot(training1, aes(y = Vector_angle_front_QRS_deg)) +
+  geom_boxplot(fill = "#FF9933", alpha = 0.5) +
+  ylab("Vector Angle on Front of QRS (degree)") +
+  ggtitle("Boxplot for Vector Angle on Front of QRS")
+## Histogram
+ggplot(training1, aes(x = Vector_angle_front_QRS_deg)) + 
+  geom_histogram(bins = 20, col = "#FF6666", fill = "#FF6666", alpha = 0.4) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Vector Angle on Front of QRS")+
+  xlab("Vector Angle on Front of QRS (degree)")
+###Skewed to the left.
+## Outliers
+boxplot.stats(training1$Vector_angle_front_QRS_deg)$stats
+boxplot.stats(training1$Vector_angle_front_QRS_deg)$out
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Vector_angle_front_QRS_deg) %>%
+  filter(Vector_angle_front_QRS_deg > 155)
+###1 normal.
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Vector_angle_front_QRS_deg) %>%
+  filter(Vector_angle_front_QRS_deg < -73)
+###2 RBBB.
+
+
+#Vector Angle on Front of T (degree) *removed 6 NA's
+summary(training1$Vector_angle_front_T_deg)
+## Boxplot
+ggplot(training1, aes(y = Vector_angle_front_T_deg)) +
+  geom_boxplot(fill = "#FF9933", alpha = 0.5) +
+  ylab("Vector Angle on Front of T (degree)") +
+  ggtitle("Boxplot for Vector Angle on Front of T")
+## Histogram
+ggplot(training1, aes(x = Vector_angle_front_T_deg)) + 
+  geom_histogram(bins = 20, col = "#FF6666", fill = "#FF6666", alpha = 0.4) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Vector Angle on Front of T")+
+  xlab("Vector Angle on Front of T (degree)")
+###Skewed to the left.
+## No outliers
+boxplot.stats(training1$Vector_angle_front_T_deg)$stats
+boxplot.stats(training1$Vector_angle_front_T_deg)$out
+
+
+#Vector Angle on Front of P (degree) *removed 19 NA's
+summary(training1$Vector_angle_front_P_deg)
+## Boxplot
+ggplot(training1, aes(y = Vector_angle_front_P_deg)) +
+  geom_boxplot(fill = "#FF9933", alpha = 0.5) +
+  ylab("Vector Angle on Front of P (degree)") +
+  ggtitle("Boxplot for Vector Angle on Front of P")
+## Histogram
+ggplot(training1, aes(x = Vector_angle_front_P_deg)) + 
+  geom_histogram(bins = 25, col = "#FF6666", fill = "#FF6666", alpha = 0.4) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Vector Angle on Front of P")+
+  xlab("Vector Angle on Front of P (degree)")
+###Skewed to the left.
+## Outliers
+boxplot.stats(training1$Vector_angle_front_P_deg)$stats
+boxplot.stats(training1$Vector_angle_front_P_deg)$out
+training1 %>%
+  select(Age_yr, Arrhythmia_Class, Vector_angle_front_P_deg) %>%
+  filter(Vector_angle_front_P_deg < 20)
+###7 normal, 1 sinus bradycardy, 3 CAD, 2 LBBB and 2 other
+
+
+#Vector Angle on Front of QRST (degree) *removed 1 NA 
+summary(training1$Vector_angle_front_QRST_deg)
+## Boxplot
+ggplot(training1, aes(y = Vector_angle_front_QRST_deg)) +
+  geom_boxplot(fill = "#FF9933", alpha = 0.5) +
+  ylab("Vector Angle on Front of QRST (degree)") +
+  ggtitle("Boxplot for Vector Angle on Front of QRST")
+## Histogram
+ggplot(training1, aes(x = Vector_angle_front_QRST_deg)) + 
+  geom_histogram(bins = 25, col = "#FF6666", fill = "#FF6666", alpha = 0.4) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Vector Angle on Front of QRST")+
+  xlab("Vector Angle on Front of QRST (degree)")
+###Skewed to the left.
+##No outliers
+boxplot.stats(training1$Vector_angle_front_QRST_deg)$stats
+boxplot.stats(training1$Vector_angle_front_QRST_deg)$out
+
+
+#Vector Angle on Front of J (degree) *removed 270 NA's
+summary(training1$Vector_angle_front_J_deg)
+ggplot(training1, aes(y = Vector_angle_front_J_deg)) +
+  geom_boxplot(fill = "#FF9933", alpha = 0.5) +
+  ylab("Vector Angle on Front of J (degree)") +
+  ggtitle("Boxplot for Vector Angle on Front of J")
+ggplot(training1, aes(x = Vector_angle_front_J_deg)) + 
+  geom_histogram(bins = 20, col = "#FF6666", fill = "#FF6666", alpha = 0.4) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Vector Angle on Front of J")+
+  xlab("Vector Angle on Front of J (degree)")
+###Fairly uniform distribution
+###May remove
+## No outliers
+boxplot.stats(training1$Vector_angle_front_J_deg)$stats
+boxplot.stats(training1$Vector_angle_front_J_deg)$out
+
+
+#Heart Rate (bpm) *removed 1 NA
+summary(training1$Heart_rate_bpm)
+## Boxplot
+ggplot(training1, aes(y = Heart_rate_bpm)) +
+  geom_boxplot(fill = "#FF9933", alpha = 0.5) +
+  ylab("Heart Rate (bpm)") +
+  ggtitle("Boxplot for Heart Rate")
+###Lower-tailed outliers are present.
+## Histogram
+ggplot(training1, aes(x = Heart_rate_bpm)) + 
+  geom_histogram(bins = 15, col = "#FF6666", fill = "#FF6666", alpha = 0.4) +
+  geom_rug(alpha=0.5) +
+  ylab("Count") +
+  ggtitle("Histogram for Heart Rate")+
+  xlab("Heart Rate (bpm)")
+#Slightly skewed to the left.
+## Outliers
+boxplot.stats(training1$Heart_rate_bpm)$stats
+boxplot.stats(training1$Heart_rate_bpm)$out
+training1 %>%
+  select(Age_yr, Heart_rate_bpm, Arrhythmia_Class) %>%
+  filter(Heart_rate_bpm < 8)
+###1 normal, 1 other, 3 sinus_tachycardy, 1 CAD, 1 OAMI and 1 AFib (which does not make sense because sinus tachycardy and AFib is expected to be high).
+
+
+#Average Width of Q wave (msec.), Average Width of R wave (msec.), Average Width of S wave (msec.), Average Width of R' wave (msec.) and Average Width of S' wave (msec.)
+#for DI, DII, DIII, AVR, AVL, AVF, V1, V2, V3, V4, V5 and V6 channels
+summary(training1[, c(17:21, 29:33, 41:45, 53:57, 65:69, 77:81, 89:93, 101:105, 113:117, 125:129, 137:141, 149:153)])
+## Boxplots
+avg_x_labels <- c("Q wave", "R wave", "S wave", "R' wave", "S' wave")
+## Reformat plotting space
+par(mar = c(2, 3, 3, 1), mfrow = c(2, 2))
+boxplot(training1[, c(17:21)], main = "Average widths of waves for DI channel", names = avg_x_labels, col = "slategray1")
+boxplot(training1[, c(29:33)], main = "Average widths of waves for DII channel", names = avg_x_labels, col = "skyblue2")
+boxplot(training1[, c(41:45)], main = "Average widths of waves for DIII channel", names = avg_x_labels, col = "orchid2")
+boxplot(training1[, c(53:57)], main = "Average widths of waves for AVR channel", names = avg_x_labels, col = "slateblue")
+boxplot(training1[, c(65:69)], main = "Average widths of waves for AVL channel", names = avg_x_labels, col = "mediumpurple1")
+boxplot(training1[, c(77:81)], main = "Average widths of waves for AVF channel", names = avg_x_labels, col = "thistle2")
+boxplot(training1[, c(89:93)], main = "Average widths of waves for V1 channel", names = avg_x_labels, col = "mistyrose")
+boxplot(training1[, c(101:105)], main = "Average widths of waves for V2 channel", names = avg_x_labels, col = "plum1")
+boxplot(training1[, c(113:117)], main = "Average widths of waves for V3 channel", names = avg_x_labels, col = "bisque")
+boxplot(training1[, c(125:129)], main = "Average widths of waves for V4 channel", names = avg_x_labels, col = "pink1")
+boxplot(training1[, c(137:141)], main = "Average widths of waves for V5 channel", names = avg_x_labels, col = "lightblue1")
+boxplot(training1[, c(149:153)], main = "Average widths of waves for V6 channel", names = avg_x_labels, col = "lavender")
+
+## Outliers
+training1[boxplot.stats(training1[, 17])$out,c(1,17)]
+###2 normal and 2 OIMI
+training1[boxplot.stats(training1[, 18])$out,c(1,18)]
+### 6 CAD, 2 other and 3 normal
+training1[boxplot.stats(training1[, 20])$out,c(1,20)]
+###2 normal
+
+training1[boxplot.stats(training1[, 29])$out,c(1,29)]
+##table(training1[boxplot.stats(training1[, 29])$out,c(1,29)])
+###11 normal, 3 RBBB
+training1[boxplot.stats(training1[, 30])$out,c(1,30)]
+###7 normal and 2 other
+training1[boxplot.stats(training1[, 31])$out,c(1,31)]
+###1 CAD
+training1[boxplot.stats(training1[, 32])$out,c(1,32)]
+###8 normal and 1 RBBB
+training1[boxplot.stats(training1[, 33])$out,c(1,33)]
+###1 normal and 1 other
+
+training1[boxplot.stats(training1[, 41])$out,c(1,41)]
+##table(training1[boxplot.stats(training1[, 41])$out,c(1,41)])
+###13 normal
+training1[boxplot.stats(training1[, 42])$out,c(1,42)]
+###2 normal
+training1[boxplot.stats(training1[, 43])$out,c(1,43)]
+###1 normal
+training1[boxplot.stats(training1[, 44])$out,c(1,44)]
+##table(training1[boxplot.stats(training1[, 44])$out,c(1,44)])
+###20 normal, 5 RBBB and 1 other
+training1[boxplot.stats(training1[, 45])$out,c(1,45)]
+###3 normal
+
+training1[boxplot.stats(training1[, 53])$out,c(1,53)]
+###1 CAD, 1 sinus tachycardy and 9 normal
+training1[boxplot.stats(training1[, 55])$out,c(1,55)]
+##table(training1[boxplot.stats(training1[, 55])$out,c(1,55)])
+###36 normal, 4 CAD, 10 OIMI, 6 RBBB and 4 other
+training1[boxplot.stats(training1[, 56])$out,c(1,56)]
+##table(training1[boxplot.stats(training1[, 56])$out,c(1,56)])
+###24 normal and 5 RBBB
+training1[boxplot.stats(training1[, 57])$out,c(1,57)]
+###1 RBBB
+
+training1[boxplot.stats(training1[, 65])$out,c(1,65)]
+##table(training1[boxplot.stats(training1[, 65])$out,c(1,65)])
+###5 RBBB, 3 CAD, 9 normal and 2 other
+training1[boxplot.stats(training1[, 66])$out,c(1,66)]
+###2 normal, 1 CAD, 2 OIMI, 1 RBBB and 1 other
+training1[boxplot.stats(training1[, 68])$out,c(1,68)]
+###3 RBBB, 1 OIMI and 4 normal
+
+training1[boxplot.stats(training1[, 77])$out,c(1,77)]
+##table(training1[boxplot.stats(training1[, 77])$out,c(1,77)])
+###8 normal, 5 OIMI, 2 CAD and 1 other
+training1[boxplot.stats(training1[, 78])$out,c(1,78)]
+###1 sinus tahcycardy
+training1[boxplot.stats(training1[, 79])$out,c(1,79)]
+###1 OIMI and 1 other
+training1[boxplot.stats(training1[, 80])$out,c(1,80)]
+###11 normal and 2 RBBB
+training1[boxplot.stats(training1[, 81])$out,c(1,81)]
+###1 normal, 1 OIMI and 1 RBBB
+
+training1[boxplot.stats(training1[, 89])$out,c(1,89)]
+##table(training1[boxplot.stats(training1[, 89])$out,c(1,89)])
+###44 normal, 5 CAD, 1 OIMI, 1 sinus bradycardy, 7 RBBB and 9 other
+training1[boxplot.stats(training1[, 90])$out,c(1,90)]
+###1 normal, 2 sinus bradycardy and 1 CAD
+training1[boxplot.stats(training1[, 91])$out,c(1,91)]
+###1 normal
+training1[boxplot.stats(training1[, 92])$out,c(1,92)]
+##table(training1[boxplot.stats(training1[, 92])$out,c(1,92)])
+###20 normal, 3 OIMI, 5 RBBB and 1 other
+training1[boxplot.stats(training1[, 93])$out,c(1,93)]
+###1 normal
+
+training1[boxplot.stats(training1[, 101])$out,c(1,101)]
+table(training1[boxplot.stats(training1[, 101])$out,c(1,101)])
+###27 normal, 2 OIMI, 1 SB, 1 RBBB and 1 other
+training1[boxplot.stats(training1[, 102])$out,c(1,102)]
+###3 normal, 1 CAD, and 1 sinus bradycardy
+training1[boxplot.stats(training1[, 103])$out,c(1,103)]
+###11 normal, 1 CAD and 1 other
+training1[boxplot.stats(training1[, 104])$out,c(1,104)]
+##table(training1[boxplot.stats(training1[, 104])$out,c(1,104)])
+###20 normal, 3 OIMI and 1 RBBB
+training1[boxplot.stats(training1[, 105])$out,c(1,105)]
+###1 normal and 2 RBBB
+
+training1[boxplot.stats(training1[, 113])$out,c(1,113)]
+##table(training1[boxplot.stats(training1[, 113])$out,c(1,113)])
+###20 normal, 1 CAD and 1 OIMI
+training1[boxplot.stats(training1[, 114])$out,c(1,114)]
+###5 normal
+training1[boxplot.stats(training1[, 115])$out,c(1,115)]
+###5 normal, 2 OIMI, 1 CAD, 1 sinus bradycardy and 2 other
+training1[boxplot.stats(training1[, 116])$out,c(1,116)]
+###3 normal and 1 other
+training1[boxplot.stats(training1[, 117])$out,c(1,117)]
+###2 normal
+
+training1[boxplot.stats(training1[, 125])$out,c(1,125)]
+##table(training1[boxplot.stats(training1[, 125])$out,c(1,125)])
+###37 normal, 1 OIMI and 1 other
+training1[boxplot.stats(training1[, 126])$out,c(1,126)]
+##table(training1[boxplot.stats(training1[, 126])$out,c(1,126)])
+###11 normal and 2 CAD
+training1[boxplot.stats(training1[, 127])$out,c(1,127)]
+###4 normal, 1 RBBB, 2 OIMI, 1 CAD and 1 other
+training1[boxplot.stats(training1[, 128])$out,c(1,128)]
+##table(training1[boxplot.stats(training1[, 128])$out,c(1,128)])
+###9 normal and 1 RBBB
+training1[boxplot.stats(training1[, 129])$out,c(1,129)]
+###1 normal
+
+training1[boxplot.stats(training1[, 137])$out,c(1,137)]
+##table(training1[boxplot.stats(training1[, 137])$out,c(1,137)])
+###32 normal and 1 RBBB
+training1[boxplot.stats(training1[, 138])$out,c(1,138)]
+###5 normal, 2 CAD, 1 OIMI and 2 other
+training1[boxplot.stats(training1[, 139])$out,c(1,139)]
+###6 normal, 2 OIMI and 1 other
+training1[boxplot.stats(training1[, 140])$out,c(1,140)]
+###4 normal
+
+training1[boxplot.stats(training1[, 149])$out,c(1,149)]
+###1 CAD and 1 normal
+training1[boxplot.stats(training1[, 150])$out,c(1,150)]
+##table(training1[boxplot.stats(training1[, 150])$out,c(1,150)])
+###16 normal, 1 sinus bradycardy, 1 RBBB and 2 other 
+training1[boxplot.stats(training1[, 152])$out,c(1,152)]
+###3 normal
+
+
+#Number of Intrinsic Deflections for DI, DII, DIII, AVR, AVL, AVF, V1, V2, V3, V4, V5 and V6 channels
+no_of_intrin_deflect <- training1[, c(22, 34, 46, 58, 70, 82, 94, 106, 118, 130, 142, 154)]
+summary(training1[, c(22, 34, 46, 58, 70, 82, 94, 106, 118, 130, 142, 154)])
+
+##Resetting plotting area
+par(mar = c(1, 3, 3, 1), mfrow = c(2, 2))
+
+#Boxplots
+boxplot(training1[, 22], main = "No. of Intrinsic Deflections for DI channel", col = "slategray1")
+boxplot(training1[, 34], main = "No. of Intrinsic Deflections for DII channel", col = "skyblue2")
+boxplot(training1[, 46], main = "No. of Intrinsic Deflections for DIII channel", col = "orchid2")
+boxplot(training1[, 58], main = "No. of Intrinsic Deflections for AVR channel", col = "slateblue")
+boxplot(training1[, 70], main = "No. of Intrinsic Deflections for AVL channel", col = "mediumpurple1")
+boxplot(training1[, 82], main = "No. of Intrinsic Deflections for AVF channel", col = "thistle2")
+boxplot(training1[, 94], main = "No. of Intrinsic Deflections for V1 channel", col = "mistyrose")
+boxplot(training1[, 106], main = "No. of Intrinsic Deflections for V2 channel", col = "plum1")
+boxplot(training1[, 118], main = "No. of Intrinsic Deflections for V3 channel", col = "bisque")
+boxplot(training1[, 130], main = "No. of Intrinsic Deflections for V4 channel", col = "pink1")
+boxplot(training1[, 142], main = "No. of Intrinsic Deflections for V5 channel", col = "lightblue1")
+boxplot(training1[, 154], main = "No. of Intrinsic Deflections for V6 channel", col = "lavender")
+## Reset plotting space
+par(mar = c(5.1, 4.1, 4.1, 2.1), mfrow = c(1, 1))
+
+
+## Outliers
+training1[boxplot.stats(training1[, 22])$out,c(1,22)]
+###4 normal, 2 CAD and 3 other
+training1[boxplot.stats(training1[, 34])$out,c(1,34)]
+###No outliers
+training1[boxplot.stats(training1[, 46])$out,c(1,46)]
+###1 CAD
+training1[boxplot.stats(training1[, 58])$out,c(1,58)]
+###No outliers
+training1[boxplot.stats(training1[, 70])$out,c(1,70)]
+###2 normal, 3 CAD and 1 OIMI
+training1[boxplot.stats(training1[, 82])$out,c(1,82)]
+###2 normal and 2 CAD
+training1[boxplot.stats(training1[, 94])$out,c(1,94)]
+##table(training1[boxplot.stats(training1[, 94])$out,c(1,94)])
+###21 normal, 4 CAD and 1 RBBB
+training1[boxplot.stats(training1[, 106])$out,c(1,106)]
+###9 normal, 2 other, 1 OIMI and 1 CAD
+training1[boxplot.stats(training1[, 118])$out,c(1,118)]
+###4 normal and 2 RBBB
+training1[boxplot.stats(training1[, 130])$out,c(1,130)]
+###2 normal and 2 RBBB
+training1[boxplot.stats(training1[, 142])$out,c(1,142)]
+###4 RBBB, 2 CAD, 3 other, and 2 normal
+training1[boxplot.stats(training1[, 154])$out,c(1,154)]
+###2 normal, 1 OIMI and 1 other
+
+
+#Existence of Diphasic R wave, Existence of Notched R wave, Existence of Notched P wave, Existence of Diphasic P wave, Existence of Notched T wave, Existence of Diphasic T wave 
+exist_of_waves <- training1[ ,c(23:28, 35:40, 47:52, 59:64, 71:76, 83:88, 95:100, 107:112, 119:124, 131:136, 143:148, 155:160)]
+summary(training1[ ,c(23:28, 35:40, 47:52, 59:64, 71:76, 83:88, 95:100, 107:112, 119:124, 131:136, 143:148, 155:160)])
+
+## Reset plotting space
+par(mar = c(5.1, 4.1, 4.1, 2.1), mfrow = c(1, 1))
+
+ext_x_labels <- c("Diaphasic R wave", "Notched R wave", "Notched P wave", "Diaphasic P wave", "Notched T wave", "Diaphasic T wave")
+barplot(training1[, c(23:28)], main = "DI channel", names = ext_x_labels)
+boxplot(training1[, c(35:40)], main = "DII channel", names = ext_x_labels)
+boxplot(training1[, c(47:52)], main = "DIII channel", names = ext_x_labels)
+boxplot(training1[, c(59:64)], main = "AVR channel", names = ext_x_labels)
+boxplot(training1[, c(71:76)], main = "AVL channel", names = ext_x_labels)
+boxplot(training1[, c(83:88)], main = "AVF channel", names = ext_x_labels)
+boxplot(training1[, c(95:100)], main = "V1 channel", names = ext_x_labels)
+boxplot(training1[, c(107:112)], main = "V2 channel", names = ext_x_labels)
+boxplot(training1[, c(119:124)], main = "V3 channel", names = ext_x_labels)
+boxplot(training1[, c(131:136)], main = "V4 channel", names = ext_x_labels)
+boxplot(training1[, c(143:148)], main = "V5 channel", names = ext_x_labels)
+boxplot(training1[, c(155:160)], main = "V6 channel", names = ext_x_labels)
+
+
+#Amplitude of Q wave (mV), Amplitude of R wave (mV), Amplitude of S wave (mV), Amplitude of R' wave (mV), Amplitude of S' wave (mV), Amplitude of P wave (mV) and Amplitude of T wave (mV)
+#for DI, DII, DIII, AVR, AVL, AVF, V1, V2, V3, V4, V5 and V6 channels
+summary(training1[, 161:280])
+
+amp_x_labels <- c("J point depression", "Amp of Q wave", "Amp of R wave", "Amp of S wave", "Amp of R' wave", "Amp of S' wave", "Amp of P wave", "Amp of T wave", "QRSA", "QRSTA")
+boxplot(training1[, c(161:170)], main = "DI channel", names = amp_x_labels, col = "slategray1", las = 2)
+boxplot(training1[, c(171:180)], main = "DII channel", names = amp_x_labels, col = "skyblue2", las = 2)
+boxplot(training1[, c(181:190)], main = "DIII channel", names = amp_x_labels, col = "orchid2", las = 2)
+boxplot(training1[, c(191:200)], main = "AVR channel", names = amp_x_labels, col = "slateblue", las = 2)
+boxplot(training1[, c(201:210)], main = "AVL channel", names = amp_x_labels, col = "mediumpurple1", las = 2)
+boxplot(training1[, c(211:220)], main = "AVF channel", names = amp_x_labels, col = "thistle2", las = 2)
+boxplot(training1[, c(221:230)], main = "V1 channel", names = amp_x_labels, col = "mistyrose", las = 2)
+boxplot(training1[, c(231:240)], main = "V2 channel", names = amp_x_labels, col = "plum1", las = 2)
+boxplot(training1[, c(241:250)], main = "V3 channel", names = amp_x_labels, col = "bisque", las = 2)
+boxplot(training1[, c(251:260)], main = "V4 channel", names = amp_x_labels, col = "pink1", las = 2)
+boxplot(training1[, c(261:270)], main = "V5 channel", names = amp_x_labels, col = "lightblue1", las = 2)
+boxplot(training1[, c(271:280)], main = "V6 channel", names = amp_x_labels, col = "lavender", las = 2)
+
+## Outliers
+boxplot.stats(training1[,161])$stats
+boxplot.stats(training1[,161])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,161] < -1.0)
+###5 CAD, 4 LBBB, 3 normal and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,161] > 0.8)
+###3 RBBB, 1 CAD, 2 normal and 1 other
+
+boxplot.stats(training1[,162])$stats
+boxplot.stats(training1[,162])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,162] < -1.0)
+###3 OAMI, 6 normal, 1 other, 1 RBBB and 1 CAD
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,162] > 0.0)
+###0
+
+boxplot.stats(training1[,163])$stats
+boxplot.stats(training1[,163])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,163] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,163] > 12.9)
+###5 normal, 1 CAD and 1 LBBB
+
+boxplot.stats(training1[,164])$stats
+boxplot.stats(training1[,164])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,164] < -3.7)
+###2 sinus tachycardy, 1 CAD, 1 RBBB, 1 left ventricule hypertrophy, 3 other and 1 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,164] > 0.0)
+###0
+
+boxplot.stats(training1[,165])$stats
+boxplot.stats(training1[,165])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,165] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,165] > 0.0)
+###2 CAD
+
+boxplot.stats(training1[,166])$stats
+boxplot.stats(training1[,166])$out
+###0
+
+boxplot.stats(training1[,167])$stats
+boxplot.stats(training1[,167])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,167] < 0.0)
+###1 LBBB, 1 RBBB, 8 normal, 2 other, 1 AFib, 1 OAMI and 1 OIMI
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,167] > 1.3)
+###3 normal, 1 CAD, 1 LBBB and 2 sinus tachycardy
+
+boxplot.stats(training1[,168])$stats
+boxplot.stats(training1[,168])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,168] < -1.5)
+###2 normal, 1 other, 2 CAD and 2 LBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,168] > 3.7)
+###0
+
+boxplot.stats(training1[,169])$stats
+boxplot.stats(training1[,169])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,169] < -11.10)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,169] > 38.10)
+###10 normal, 3 LBBB and 1 CAD
+
+boxplot.stats(training1[,170])$stats
+boxplot.stats(training1[,170])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,170] < -11.20)
+###1 CAD, 1 OAMI ans 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,170] > 49.80)
+###6 normal
+
+
+boxplot.stats(training1[,171])$stats
+boxplot.stats(training1[,171])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,171] < -1.1)
+###5 LBBB, 3 CAD, 1 AFib and 3 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,171] > 0.8)
+###2 RBBB, 1 LBBB, 1 normal and 1 other
+
+boxplot.stats(training1[,172])$stats
+boxplot.stats(training1[,172])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,172] < -1.0)
+table(a)
+###7 normal, 6 CAD, 10 OIMI, 2 sinus bradycardy, 3 RBBB, 1 left ventricule hypertrophy, 1 AFib and 2 other other, 2 RBBB and 1 CAD
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,172] > 0.0)
+###0
+
+boxplot.stats(training1[,173])$stats
+boxplot.stats(training1[,173])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,173] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,173] > 15.8)
+###3 normal, 1 other, 2 CAD and 1 left ventricule hypertrophy
+
+boxplot.stats(training1[,174])$stats
+boxplot.stats(training1[,174])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,174] < -4.70)
+###2 OAMI, 1 LBBB, 1 RBBB, 1 VPC, 1 SVPC and 3 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,174] > 0.0)
+###0
+
+boxplot.stats(training1[,175])$stats
+boxplot.stats(training1[,175])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,175] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,175] > 0.0)
+###5 normal, 1 SVPC, 1 sinus tachycardy, 1 RBBB and 1 CAD
+
+boxplot.stats(training1[,176])$stats
+boxplot.stats(training1[,176])$out
+###0 outliers
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,176] < 0.0)
+### 1 sinus tachycardy and 1 RBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,176] > 0.0)
+###0
+
+boxplot.stats(training1[,177])$stats
+boxplot.stats(training1[,177])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,177] < -0.2)
+###3CAD, 1 LBBB, 1 AFib, 3 normal and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,177] > 2.2)
+###2 other
+
+boxplot.stats(training1[,178])$stats
+boxplot.stats(training1[,178])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,178] < -1.5)
+###3 LBBB, 3 CAD, 1 OAMI, 1 AFib, 1 normal and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,178] > 4.2)
+###2 normal, 1 LBBB, 1 left ventricule hypertrophy
+
+boxplot.stats(training1[,179])$stats
+boxplot.stats(training1[,179])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,179] < -18.6)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,179] > 51.5)
+###2 normal, 1 other and 1 CAD
+
+boxplot.stats(training1[,180])$stats
+boxplot.stats(training1[,180])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,180] < -16.2)
+###1 LBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,180] > 72.7)
+###4 normal, 1 left ventricule hypertrophy, 1 LBBB and 1 other
+
+
+boxplot.stats(training1[,181])$stats
+boxplot.stats(training1[,181])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,181] < -0.8)
+###2 normal, 1 other, 1LBBB, 3 CAD, 1 AFib, 1 RBBB, 1 sinus tachycadry
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,181] > 0.8)
+###5 normal, 3 other, 3 OAMI, 1 SVPC, 1 VPC, 4 CAD, 3 LBBB and 1 sinus bradycardy
+
+boxplot.stats(training1[,182])$stats
+boxplot.stats(training1[,182])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,182] < -3.0)
+table(a)
+###16 normal, 9 CAD, 12 OIMI, 8, OIMI, 2 sinus tachycardy, 3 sinus bradycardy, 2 VPC, 1 SVPC, 3 RBBB and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,182] > 0.0)
+###0
+
+boxplot.stats(training1[,183])$stats
+boxplot.stats(training1[,183])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,183] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,183] > 10.6)
+###2 CAD, 1 sinus bradyacardy, 1 left ventricule hypertrophy, 1 RBBB, 1 OAMI, 3 normal and 2 other
+
+boxplot.stats(training1[,184])$stats
+boxplot.stats(training1[,184])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,184] < -6.20)
+###13 normal, 1 other, 4 OAMI, 1 CAD, 1 sinus tachycardy, 2 LBBB, 1 RBBB and 1 SVPC
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,184] > 0.0)
+###0
+
+boxplot.stats(training1[,185])$stats
+boxplot.stats(training1[,185])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,185] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,185] > 0.0)
+###17 normal, 2 sinus tachycardy, 3 sinus bradycardy, 3 RBBB and 1 OAMI
+
+boxplot.stats(training1[,186])$stats
+boxplot.stats(training1[,186])$out
+###0 outliers
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,186] < 0.0)
+###3 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,186] > 0.0)
+###0
+
+boxplot.stats(training1[,187])$stats
+boxplot.stats(training1[,187])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,187] < -0.5)
+###6 normal, 2 other, 4 CAD, 3 LBBB, 1 RBBB, 1 sinus bradycardy, 1 AFib and 1 OAMI
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,187] > 1.4)
+###1 OAMI, 1 CAD, 1 RBBB, 1 normal and 2 other
+
+boxplot.stats(training1[,188])$stats
+boxplot.stats(training1[,188])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,188] < -2.0)
+### 1 other and 1 RBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,188] > 2.7)
+###1 other, 2 LBBB, 1 RBBB and 1 OAMI
+
+boxplot.stats(training1[,189])$stats
+boxplot.stats(training1[,189])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,189] < -32.40)
+###1 OAMI, 1 CAD, 1 LBBB, 1 VPC, 1 normal and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,189] > 38.20)
+###1 normal, 2 other, 1 CAD and 1 left ventricule hypertrophy
+
+boxplot.stats(training1[,190])$stats
+boxplot.stats(training1[,190])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,190] < -36.10)
+###1 CAD and 1 sinus bradycardy
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,190] > 48.60)
+###1 normal, 1 other, 1 OAMI, 1 left ventricule hypertrophy, 1 RBBB and 1 LBBB
+
+
+boxplot.stats(training1[,191])$stats
+boxplot.stats(training1[,191])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,191] < -0.7)
+###2 RBBB, 1 LBBB and 2 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,191] > 1.1)
+###4 LBBB, 1 RBBB, 2 CAD and 1 AFib
+
+boxplot.stats(training1[,192])$stats
+boxplot.stats(training1[,192])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,192] < 11.5)
+table(a)
+###172 normal, 31 CAD, 11 OAMI, 11 OIMI, 10 sinus tachycardy, 18 sinus bradycardy, 3 VPC, 2 SVPC, 7 LBBB, 35 RBBB, 3 left ventricule hypertrophy, 4 AFib and 16 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,192] > 0.0)
+###0
+
+boxplot.stats(training1[,193])$stats
+boxplot.stats(training1[,193])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,193] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,193] > 3.2)
+###3 RBBB, 1 sinus tachycardy and 2 normal
+
+boxplot.stats(training1[,194])$stats
+boxplot.stats(training1[,194])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,194] < 0.0)
+table(a)
+###29 normal, 7 CAD, 2 OAMI, 9 OIMI, 2 sinus tachycardy, 1 sinus brdaycardy, 5 RBBB, 1 left vnetricule hypertrophy, 1 AFib and 3 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,194] > 0.0)
+###0
+
+boxplot.stats(training1[,195])$stats
+boxplot.stats(training1[,195])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,195] < 0.0)
+###0
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,195] > 0.0)
+table(a)
+###14 normal, 3 CAD, 1 OAMI, 3 OIMI, 1 sinus bradycardy, 5 RBBB, 1 left ventricule hypertrophy and 1 other
+
+boxplot.stats(training1[,196])$stats
+boxplot.stats(training1[,196])$out
+###0 outliers
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,196] < 0.0)
+###1 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,196] > 0.0)
+###0
+
+boxplot.stats(training1[,197])$stats
+boxplot.stats(training1[,197])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,197] < -1.6)
+###1 other and 1 sinus tachycardy
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,197] > 0.0)
+###6 normal, 1 other, 2 CAD, 1 AFib, 1 OAMI and 1 RBBB
+
+boxplot.stats(training1[,198])$stats
+boxplot.stats(training1[,198])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,198] < -3.7)
+###1 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,198] > 1.3)
+###2 normal, 3 LBBB, 2 CAD and 1 AFib
+
+boxplot.stats(training1[,199])$stats
+boxplot.stats(training1[,199])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,199] < -35.60)
+###8 normal, 3 LBBB and 2 CAD
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,199] > 6.50)
+###1 RBBB
+
+boxplot.stats(training1[,200])$stats
+boxplot.stats(training1[,200])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,200] < -54.60)
+###6 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,200] > 7.60)
+###1 LBBB and 1 other
+
+
+boxplot.stats(training1[,201])$stats
+boxplot.stats(training1[,201])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,201] < -1.1)
+###3 LBBB, 2 CAD and 2 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,201] > 0.7)
+###1 normal, 1 other, 1 LBBB, 1 RBBB, 1 CAD
+
+boxplot.stats(training1[,202])$stats
+boxplot.stats(training1[,202])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,202] < -1.5)
+table(a)
+###16 normal, 5 OAMI, 2 sinus tachycardy, 1 sinus bradycardy, 1 LBBB, 3 RBBB and 2 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,202] > 0.0)
+###0
+
+boxplot.stats(training1[,203])$stats
+boxplot.stats(training1[,203])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,203] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,203] > 10.7)
+###4 normal, 2 CAD, 1 sinus tachycardy, 1 VPC and 1 LBBB
+
+boxplot.stats(training1[,204])$stats
+boxplot.stats(training1[,204])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,204] < -4.4)
+###8 normal, 2 other, 3 CAD, 1 sinus bradycardy, 1 sinus tachycardy, 2 RBBB, 1 left ventricule hypertrophy, 1 AFib and 1 OIMI
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,204] > 0.0)
+###0
+
+boxplot.stats(training1[,205])$stats
+boxplot.stats(training1[,205])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,205] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,205] > 0.0)
+###5 normal, 1 RBBB, 1 OIMI and 1 other.
+
+boxplot.stats(training1[,206])$stats
+boxplot.stats(training1[,206])$out
+###0 outliers
+
+boxplot.stats(training1[,207])$stats
+boxplot.stats(training1[,207])$out
+###No outliers
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,207] < -1.0)
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,207] > 1.3)
+
+boxplot.stats(training1[,208])$stats
+boxplot.stats(training1[,208])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,208] < -2.10)
+###2 LBBB and 1 OAMI
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,208] > 2.00)
+###1 other and 1 RBBB
+
+boxplot.stats(training1[,209])$stats
+boxplot.stats(training1[,209])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,209] < -21.00)
+###2 CAD, 1 OAMI, 2 LBBB, 1 VPC and 2 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,209] > 31.60)
+###2 normal, 2 CAD, 2 LBBB, 1 OAMI and 1 VPC
+
+boxplot.stats(training1[,210])$stats
+boxplot.stats(training1[,210])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,210] < -20.40)
+###1 OAMI and 1 left ventricule hypertrophy
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,210] > 37.40)
+###3 normal
+
+boxplot.stats(training1[,211])$stats
+boxplot.stats(training1[,211])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,211] < -0.8)
+###4 normal, 1 other, 2 LBBB, 2 RBBB, 3 CAD and 2 AFib
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,211] > 0.8)
+###3 normal, 1 LBBB and 1 OAMI
+
+boxplot.stats(training1[,212])$stats
+boxplot.stats(training1[,212])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,212] < -1.0)
+table(a)
+###9 normal, 6 CAD, 11 OIMI, 2 sinus bradycardy, 1 VPC, 1 SVPC, 5 RBBB, 1 left ventricule hypertrophy, 1 AFib and 2 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,212] > 0.0)
+###0
+
+boxplot.stats(training1[,213])$stats
+boxplot.stats(training1[,213])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,213] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,213] > 13.3)
+###2 normal, 2 other, 2 CAD, 1 RBBB, 1 sinus bradycardy and 1 left ventricule hypertrophy
+
+boxplot.stats(training1[,214])$stats
+boxplot.stats(training1[,214])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,214] < -5.00)
+###5 OAMI, 2 LBBB, 1 sinus tachycardy, 1 VPC, 1 SVPC, 7 normal and 2 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,214] > 0.0)
+###0
+
+boxplot.stats(training1[,215])$stats
+boxplot.stats(training1[,215])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,215] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,215] > 0.0)
+###6 normal, 2 CAD, 2 sinus tachycardy, 1 RBBB and 2 other
+
+boxplot.stats(training1[,216])$stats
+boxplot.stats(training1[,216])$out
+###0 outliers
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,216] < 0.0)
+### 1 sinus tachycardy, 1 CAD and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,216] > 0.0)
+###0
+
+boxplot.stats(training1[,217])$stats
+boxplot.stats(training1[,217])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,217] < -0.4)
+###2 CAD, 1 LBBB, 1 noraml and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,217] > 1.8)
+###3 other
+
+boxplot.stats(training1[,218])$stats
+boxplot.stats(training1[,218])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,218] < -0.9)
+###2 LBBB, 2 RBBB, 3 CAD, 3 AFib, 1 OIMI, 1 OAMI and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,218] > 2.6)
+###9 normal, 1 LBBB, 3 RBBB, 1 sinus tachycardy, 1 left ventricule hypertrophy and 1 OAMI
+
+boxplot.stats(training1[,219])$stats
+boxplot.stats(training1[,219])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,219] < -24.20)
+###1 OAMI, 1 VPC and 1 LBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,219] > 42.20)
+###3 normal, 1 other and 1 CAD
+
+boxplot.stats(training1[,220])$stats
+boxplot.stats(training1[,220])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,220] < -26.90)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,220] > 55.60)
+###2 normal, 1 other, 1 LBBB, 1 OAMI and 1 left ventricule hypertrophy
+
+boxplot.stats(training1[,221])$stats
+boxplot.stats(training1[,221])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,221] < -0.8)
+###1 normal, 3 RBBB and 1 sinus tachycardy
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,221] > 1.9)
+###1 normal, 1 other, 7 LBBB, 1 RBBB and 1 CAD
+
+boxplot.stats(training1[,222])$stats
+boxplot.stats(training1[,222])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,222] < 0.0)
+table(a)
+###26 normal, 7 CAD, 9 OAMI, 3 sinus tachycardy, 5 sinus bradycardy, 1 VPC, 1 SVPC, 5 LBBB, 5 RBBB, 2 AFib and 3 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,222] > 0.0)
+###0
+
+boxplot.stats(training1[, 223])$stats
+boxplot.stats(training1[, 223])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,223] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,223] > 4.50)
+###2 normal, 1 other, 4 RBBB, 1 left ventricule hypertrophy, 3 OIMI and 2 sinus tachycardy
+
+boxplot.stats(training1[, 224])$stats
+boxplot.stats(training1[, 224])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,224] < -17.3)
+###2 LBBB, 3 normal, 1 other and 1 left ventricule hypertrophy
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,224] > 0.0)
+###0
+
+boxplot.stats(training1[, 225])$stats
+boxplot.stats(training1[, 225])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,225] < 0.0)
+###0
+a <-training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,225] > 0.0)
+table(a)
+###8 normal, 1 CAD, 20 RBBB, 1 left ventricule hypertrophy and 1 AFib
+
+boxplot.stats(training1[,226])$stats
+boxplot.stats(training1[,226])$out
+###0 outliers
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,226] < 0.0)
+###1 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,226] > 0.0)
+###0
+
+boxplot.stats(training1[,227])$stats
+boxplot.stats(training1[,227])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,227] < -1.90)
+###1 other, 1 sinus tachycardy and 1  left ventricule hypertrophy
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,227] > 1.10)
+###0
+
+boxplot.stats(training1[, 228])$stats
+boxplot.stats(training1[, 228])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,228] < -3.90)
+###3 RBBB and 1 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,228] > 4.00)
+###5 LBBB, 1 CAD and 1 other
+
+boxplot.stats(training1[,229])$stats
+boxplot.stats(training1[,229])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,229] < -46.70)
+###3 normal, 2 other, 2 CAD, 7 LBBB and 1 left ventricule hypertrophy
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,229] > 10.20)
+###6 RBBB and 1 OIMI
+
+boxplot.stats(training1[,230])$stats
+boxplot.stats(training1[,230])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,230] < -50.70)
+###2 normal, 1 other, 1 left hypertrophy and 1 LBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,230] > 23.80)
+###1 other, 2 CAD, 2 RBBB and 1 other
+
+
+boxplot.stats(training1[,231])$stats
+boxplot.stats(training1[,231])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,231] < -1.00)
+###1 CAD and 2 RBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,231] > 2.70)
+###3 normal, 2 other, 1 sinus bradycardy, 2 OAMI, 1 OIMI, 1 CAD and 7 LBBB
+
+boxplot.stats(training1[,232])$stats
+boxplot.stats(training1[,232])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,232] < 0.0)
+table(a)
+###6 normal,3 CAD, 11 OAMI, 2 sinus tachycardy, 4 sinus bradycardy, 3 LBBB, 1 left ventricule hypertrophy, 1 AFib and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,232] > 0.0)
+###0
+
+boxplot.stats(training1[,233])$stats
+boxplot.stats(training1[,233])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,233] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,233] > 10.0)
+###2 normal, 1 other, 3 OIMI, 3 CAD, 2 RBBB, 1 sinus tachycardy and 1 left ventricule hypertrophy
+
+boxplot.stats(training1[,234])$stats
+boxplot.stats(training1[,234])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,234] < -21.20)
+###3 LBBB. 1 CAD, 1 left ventricule hypertrophy, 1 sinus bradycardy, 1 normal and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,234] > 0.0)
+###0
+
+boxplot.stats(training1[,235])$stats
+boxplot.stats(training1[,235])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,235] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,235] > 0.0)
+###3 normal, 3 other, 15 RBBB, 1 sinus bradycardy, 1 VPC and 1 CAD
+
+boxplot.stats(training1[,236])$stats
+boxplot.stats(training1[,236])$out
+###0 outliers
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,236] < 0.0)
+###2 RBBB and 1 VPC
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,236] > 0.0)
+###0
+
+boxplot.stats(training1[,237])$stats
+boxplot.stats(training1[,237])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,237] < -1.4)
+###1 normal, 1 left ventricule hypertrophy and 1 LBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,237] > 1.1)
+###0
+
+boxplot.stats(training1[,238])$stats
+boxplot.stats(training1[,238])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,238] < -2.3)
+###5 RBBB and 1 OAMI
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,238] > 7.3)
+###4 normal, 5 LBBB, 1 RBBB, 2 CAD, 1 OIMI and 1 sinus bradycardy
+
+boxplot.stats(training1[,239])$stats
+boxplot.stats(training1[,239])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,239] < -53.20)
+###5 OAMI, 7 LBBB, 1 left ventricule hypertrophy, 1 CAD, 1 normal and 2 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,239] > 20.90)
+###3 RBBB, 2 OIMI and 1 CAD
+
+boxplot.stats(training1[,240])$stats
+boxplot.stats(training1[,240])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,240] < -41.50)
+###3 OAMI, 2 LBBB, 1 RBBB, 1 left ventricule hypertrophy, 1 normal and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,240] > 65.80)
+###4 normal, 2 RBBB, 1 CAD, sinus tachycardy and 1 OIMI
+
+boxplot.stats(training1[,241])$stats
+boxplot.stats(training1[,241])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,241] < -1.90)
+###1 CAD, 1 OIMI and 1 RBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,241] > 3.20)
+###3 normal, 1 other, 5 LBBB, 2 OAMI, 1 sinus tachycardy, 1 CAD and 1 left ventricule hypertrophy
+
+boxplot.stats(training1[,242])$stats
+boxplot.stats(training1[,242])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,242] < 0.0)
+table(a)
+###3 normal, 1 CAD, 11 OAMI, 1 sinus bradycardy, 1 VPC, 1 left ventricule hypertrophy, 1 AFib and 3 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,242] > 0.0)
+###0
+
+boxplot.stats(training1[,243])$stats
+boxplot.stats(training1[,243])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,243] < 0.00)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,243] > 20.30)
+###2 normal, 3 CAD, 2 RBBB and 2 OIMI
+
+boxplot.stats(training1[,244])$stats
+boxplot.stats(training1[,244])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,244] < -23.8)
+###1 normal, 2 other, 1 left ventriucle hypertrophy, 4 LBBB and 1 CAD
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,244] > 0.0)
+###0
+
+boxplot.stats(training1[,245])$stats
+boxplot.stats(training1[,245])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,245] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,245] > 0.0)
+###3 RBBB and 1 sinus bradycardy
+
+boxplot.stats(training1[,246])$stats
+boxplot.stats(training1[,246])$out
+###0 outliers
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,246] < 0.0)
+###2 RBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,246] > 0.0)
+###0
+
+boxplot.stats(training1[,247])$stats
+boxplot.stats(training1[,247])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,247] < -0.8)
+###6 normal, 1 VPC, 2 LBBB and 1 OAMI
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,247] > 1.4)
+###1 left ventricule hypertrophy, 1 sinus tachycardy and 1 other
+
+boxplot.stats(training1[,248])$stats
+boxplot.stats(training1[,248])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,248] < -3.00)
+###1 CAD, 3 RBBB and 1 OAMI
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,248] > 10.70)
+###1 normal, 3 LBBB, 2 RBBB, 1 CAD and 1 sinus bradycardy
+
+boxplot.stats(training1[,249])$stats
+boxplot.stats(training1[,249])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,249] < -60.10)
+###5 LBBB, 6 OAMI, 1 VPC, 1 left ventricule hypertrophy, 1 sinus bradycardy, 1 normal and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,249] > 47.40)
+###2 RBBB and 1 OIMI
+
+boxplot.stats(training1[,250])$stats
+boxplot.stats(training1[,250])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,250] < -64.90)
+###1 OAMI, 1 left ventricule hypertrophy and 1 RBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,250] > 117.30)
+###3 normal, 1 sinus tachycardy and 2 RBBB
+
+
+boxplot.stats(training1[,251])$stats
+boxplot.stats(training1[,251])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,251] < -1.60)
+###3 CAD, 1 AFib and 1 RBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,251] > 1.40)
+###4 normal, 1 other, 1 left ventricule hypertrophy, 4 OAMI, 4 LBBB, 1 RBBB, 1 sinus bradycardy, 1 sinus tachycardy and 1 CAD
+
+boxplot.stats(training1[,252])$stats
+boxplot.stats(training1[,252])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,252] < 0.0)
+table(a)
+###15 normal, 3 CAD, 10 OAMI, 8 OIMI, 2 sinus tachycardy, 1 sinus bradycardy, 4 RBBB, 1 VPC, 7 RBBB, 1 AFib and 3 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,252] > 0.0)
+###0
+
+boxplot.stats(training1[,253])$stats
+boxplot.stats(training1[,253])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,253] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,253] > 24.90)
+###2 normal, 1 other, 1 CAD, 1 RBBB, 1 AFib and left ventricule hypertrophy
+
+boxplot.stats(training1[,254])$stats
+boxplot.stats(training1[,254])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,254] < -17.2)
+###4 normal, 1 other, 3 LBBB, 1 RBBB, 1 CAD and 1 left ventricule hypertrophy
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,254] > 0.0)
+###0
+
+boxplot.stats(training1[,255])$stats
+boxplot.stats(training1[,255])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,255] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,255] > 0.0)
+###4 normal, 1 other, 2 sinus tachycardy, 1 sinus bradycardy and 2 RBBB
+
+boxplot.stats(training1[,256])$stats
+boxplot.stats(training1[,256])$out
+###0 outliers
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,256] < 0.0)
+###1 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,256] > 0.0)
+###0
+
+boxplot.stats(training1[,257])$stats
+boxplot.stats(training1[,257])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,257] < -0.2)
+###7 normal, 1 other, 3 CAD, 4 RBBB and 1 AFib
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,257] > 1.4)
+###1 normal, 1 CAD and 1 other
+
+boxplot.stats(training1[,258])$stats
+boxplot.stats(training1[,258])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,258] < -3.1)
+###3 CAD and 1 RBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,258] > 7.9)
+###2 LBBB, 1 CAD and 2 normal
+
+boxplot.stats(training1[,259])$stats
+boxplot.stats(training1[,259])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,259] < -39.10)
+###1 normal, 1 other, 4 LBBB, 1 RBBB, 4 OAMI and 1 CAD
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,259] > 61.80)
+###2 normal, 1 other and 1 RBBB
+
+boxplot.stats(training1[,260])$stats
+boxplot.stats(training1[,260])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,260] < -52.70)
+###1 normal
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,260] > 113.10)
+###2 normal, 1 left ventricule hypertrophy and 1 RBBB
+
+
+boxplot.stats(training1[, 261])$stats
+boxplot.stats(training1[, 261])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,261] < -1.2)
+###2 normal, 1 other, 8 CAD, 3 LBBB, 1 RBBB, 1 OIMI, 1 AFib, and 1 left ventricule hypertrophy
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,261] > 0.7)
+###2 normal, 1 other, 3 OAMI, 2 RBBB and 2 LBBB
+
+boxplot.stats(training1[,262])$stats
+boxplot.stats(training1[,262])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,262] < 0.0)
+table(a)
+###31 normal, 8 CAD, 5 OAMI, 6 OIMI, 4 sinus tachycardy, 4 sinus bradycardy, 1 VPC, 9 RBBB, 1 AFib and 8 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,262] > 0.0)
+###0
+
+boxplot.stats(training1[,263])$stats
+boxplot.stats(training1[,263])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,263] < 0.00)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,263] > 21.90)
+###1 normal, 1 other, 2 RBBB, 1 left ventricule hypertrophy and 1 sinus bradycardy
+
+boxplot.stats(training1[,264])$stats
+boxplot.stats(training1[,264])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,264] < -9.60)
+###4 normal, 1 left ventricule hypertrophy, 3 RBBB, 1 OAMI and 1 SVPC
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,264] > 0.00)
+###0
+
+boxplot.stats(training1[,265])$stats
+boxplot.stats(training1[,265])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,265] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,265] > 0.0)
+###1 normal, 1 CAD, 1 RBBB and 1 LBBB
+
+boxplot.stats(training1[,266])$stats
+boxplot.stats(training1[,266])$out
+###0 outliers
+
+boxplot.stats(training1[,267])$stats
+boxplot.stats(training1[,267])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,267] < -0.2)
+###4 RBBB, 4 normal, 1 other, 1 AFib and 1 CAD
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,267] > 1.4)
+###1 normal, 1 other, 1 sinus tachycardy
+
+boxplot.stats(training1[,268])$stats
+boxplot.stats(training1[,268])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,268] < -2.30)
+###4 CAD and 2 LBBB
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,268] > 5.50)
+###2 normal, 1 LBBB and 1 RBBB
+
+boxplot.stats(training1[,269])$stats
+boxplot.stats(training1[,269])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,269] < -19.40)
+###2 LBBB, 1 RBBB, 2 OAMI and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,269] > 54.60)
+###2 normal, 1 sinus bradycardy and 1 left ventricule hypertrophy
+
+boxplot.stats(training1[,270])$stats
+boxplot.stats(training1[,270])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,270] < -25.50)
+###1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,270] > 95.30)
+###2 normal, 1 left ventricule hypertrophy and 1 RBBB
+
+
+boxplot.stats(training1[,271])$stats
+boxplot.stats(training1[,271])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,271] < -1.30)
+###4 normal, 1 other, 5 LBBB, 1 left ventricule hypertrophy and 3 CAD
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,271] > 0.80)
+###2 OAMI, 2 RBBB, 1 normal and 1 other
+
+boxplot.stats(training1[,272])$stats
+boxplot.stats(training1[,272])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,272] < -1.20)
+###3 normal, 2 OAMI, 6 OIMI, 4 RBBB, 1 AFib and 2 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,272] > 0.0)
+###0
+
+boxplot.stats(training1[,273])$stats
+boxplot.stats(training1[,273])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,273] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,273] > 17.3)
+###1 normal, 1 other, 1 RBBB and 1 left ventricule hypertrophy
+
+boxplot.stats(training1[,274])$stats
+boxplot.stats(training1[,274])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,274] < -5.00)
+###4 normal, 1 OAMI, 1 RBBB and 1 SVPC
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,274] > 0.0)
+###0
+
+boxplot.stats(training1[,275])$stats
+boxplot.stats(training1[,275])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,275] < 0.0)
+###0
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,275] > 0.0)
+###2 normal and 1 OIMI
+
+boxplot.stats(training1[,276])$stats
+boxplot.stats(training1[,276])$out
+###0 outliers
+
+boxplot.stats(training1[,277])$stats
+boxplot.stats(training1[,277])$out
+a <- training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,277] < 0.0)
+table(a)
+###13 normal, 3 CAD, 1 sinus bradycardy,1 VPC, 4 RBBB, 2 AFib and 2 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,277] > 1.1)
+###3 normal, 1 LBBB, 2 CAD, 2 sinus tachycardy and 2 other
+
+boxplot.stats(training1[,278])$stats
+boxplot.stats(training1[,278])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,278] < -1.90)
+###3 LBBB, 2 CAD, 1 lft ventricule hypertrophy, 1 OAMI and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,278] > 3.90)
+###2 normal, 1 LBBB and 1 RBBB
+
+boxplot.stats(training1[,279])$stats
+boxplot.stats(training1[,279])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,279] < -8.80)
+###1 other, 1 OAMI and 1 SVPC
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,279] > 46.70)
+###4 normal, 1 other, 3 LBBB and 1 left ventricule hypertrophy
+
+boxplot.stats(training1[,280])$stats
+boxplot.stats(training1[,280])$out
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,280] < -15.10)
+###1 OAMI and 1 other
+training1 %>%
+  select(Arrhythmia_Class) %>%
+  filter(training1[,280] > 73.00)
+###2 normal, 1 RBBB and 1 LBBB
+
+
+
+## Bivariate Analysis
+
+ggplot(training1, aes(x = Age_yr, fill = Arrhythmia_Class)) + 
+  geom_histogram(binwidth = age_bw, col = "black")
+
+ggplot(training1, aes(x = Sex, fill = Arrhythmia_Class)) + 
+  geom_bar(col = "black")
+
+ggplot(training1, aes(x = Height_cm, fill = Arrhythmia_Class)) + 
+  geom_histogram()
+
+ggplot(training1, aes(x = Weight_kg, fill = Arrhythmia_Class)) + 
+  geom_histogram()
+
+# Avg_QRS_duration_msec
+ggplot(training1, aes(x = Avg_QRS_duration_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+ggplot(training1, aes(x = Avg_QRS_duration_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+###See some deviations from the density plot for normal class and between different classes, like Left Bundle Branch Block.
+
+# Avg_duration_bet_onset_P_and_Q_waves_msec
+ggplot(training1, aes(x = Avg_duration_bet_onset_P_and_Q_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+ggplot(training1, aes(x = Avg_duration_bet_onset_P_and_Q_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2) +
+  coord_cartesian(ylim = c(0, 0.06)) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+###See that the class for Atrial fibrillation or flutter drastically differs from normal and the rest of the classes.
+###VPC, SVPC, LBB all shift to right slightly.
+###See many different behaviours amoung the different classes.  Can be important for distinguishing the types of arrythmias.
+
+ggplot(training1, aes(x = Avg_duration_bet_onset_Q_and_offset_T_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###Many differences between classes. May be important as well to distinguish types of arrythmia.
+
+## Avg_duration_bet_two_consecutive_T_waves_msec
+ggplot(training1, aes(x = Avg_duration_bet_two_consecutive_T_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+ggplot(training1, aes(x = Avg_duration_bet_two_consecutive_T_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+###Many differences between classes. May be important to distinguish classes.
+
+## Avg_duration_bet_two_consecutive_P_waves_msec
+ggplot(training1, aes(x = Avg_duration_bet_two_consecutive_P_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+ggplot(training1, aes(x = Avg_duration_bet_two_consecutive_P_waves_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2) +
+  coord_cartesian(ylim= c(0, 0.06)) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+###See that the class for Atrial fibrillation or flutter drastically differs from the other classes and normal class.
+###Simliar to "Avg_duration_bet_onset_of_P_and_Q_waves_msec". Can be important for distinguishing the types of arrythmias.
+
+ggplot(training1, aes(x = Vector_angle_front_QRS_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+###Different behaviours amoung classes and normal class. May be important to distinguish type of arrhythmia.
+
+## Vector_angle_front_T_deg
+ggplot(training1, aes(x = Vector_angle_front_T_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+ggplot(training1, aes(x = Vector_angle_front_T_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2) +
+  coord_cartesian(ylim= c(0, 0.06)) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+###Left Bundle Branch Block has a very different behaviour from the rest.
+###Many differences between classes. May be very important to distinguish types of arrythmia.**
+
+## Vector_angle_front_P_deg
+ggplot(training1, aes(x = Vector_angle_front_P_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+ggplot(training1, aes(x = Vector_angle_front_P_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2) +
+  coord_cartesian(ylim= c(0, 0.06)) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+###Many differences between classes and from normal class. May be important.
+
+## Vector_angle_front_QRST_deg
+ggplot(training1, aes(x = Vector_angle_front_QRST_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+ggplot(training1, aes(x = Vector_angle_front_QRST_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+###Left Bundle Brach Block more different than from other classes and normal class. May be important.
+
+## Vector_angle_front_J_deg
+ggplot(training1, aes(x = Vector_angle_front_J_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+ggplot(training1, aes(x = Vector_angle_front_J_deg, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+##270/323 ###About 84% of the data is missing in this column
+###Very few data for this attribute in this dataset.
+
+## Heart_rate_bpm
+ggplot(training1, aes(x = Heart_rate_bpm, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2)
+ggplot(training1, aes(x = Heart_rate_bpm, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_density(alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4) +
+  geom_vline(xintercept = median(training1$Heart_rate_bpm, na.rm = TRUE), lty = 2)
+###Many differences between classes. May be very important to differentiate between classes.*** (sinus bradycardy, supraventricular premature contraction, and left ventricular hypertrophy more.)
+##table(training1$Arrhythmia_Class, training1$Heart_rate_bpm)
+
+## DI-Average Widths of Waves (msec)
+ggplot(training1, aes(x = DI_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = DI_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = DI_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "DI_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "DI_Avg_width_R'_wave_msec"])
+###Only 2 values of 12 and rest are 0
+##ggplot(training1, aes(x = "DI_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "DI_Avg_width_S'_wave_msec"])
+###All values are 0
+
+## DII-Average Widths of Waves (msec)
+ggplot(training1, aes(x = DII_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = DII_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = DII_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "DII_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "DII_Avg_width_R'_wave_msec"])
+###Few values not 0
+##ggplot(training1, aes(x = "DII_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "DII_Avg_width_S'_wave_msec"])
+###Only 2 values values are 0
+
+## DIII-Average Widths of Waves (msec)
+ggplot(training1, aes(x = DIII_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = DIII_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = DIII_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "DIII_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "DIII_Avg_width_R'_wave_msec"])
+###Small number of values not 0
+##ggplot(training1, aes(x = "DIII_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "DIII_Avg_width_S'_wave_msec"])
+###Only 2 values not 0
+
+## AVR-Average Widths of Waves (msec)
+ggplot(training1, aes(x = AVR_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = AVR_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = AVR_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "AVR_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "AVR_Avg_width_R'_wave_msec"])
+###Most values are all 0
+##ggplot(training1, aes(x = "AVR_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "AVR_Avg_width_S'_wave_msec"])
+###Only 1 value not 0
+
+## AVL-Average Widths of Waves (msec)
+ggplot(training1, aes(x = AVL_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = AVL_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = AVL_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "AVL_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "AVL_Avg_width_R'_wave_msec"])
+###Most values are 0
+##ggplot(training1, aes(x = "AVL_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "AVL_Avg_width_S'_wave_msec"])
+###All values are 0
+
+## AVF-Average Widths of Waves (msec)
+ggplot(training1, aes(x = AVF_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = AVF_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = AVF_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "AVF_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "AVF_Avg_width_R'_wave_msec"])
+###Most values are 0
+##ggplot(training1, aes(x = "AVF_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "AVF_Avg_width_S'_wave_msec"])
+###Only 3 values not 0
+
+## V1-Average Widths of Waves (msec)
+ggplot(training1, aes(x = V1_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V1_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V1_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "V1_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V1_Avg_width_R'_wave_msec"])
+###Many values are 0
+##ggplot(training1, aes(x = "V1_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V1_Avg_width_S'_wave_msec"])
+###All but 1 value are 0
+
+## V2-Average Widths of Waves (msec)
+ggplot(training1, aes(x = V2_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V2_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V2_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "V2_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V2_Avg_width_R'_wave_msec"])
+###Many values are 0
+##ggplot(training1, aes(x = "V2_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V2_Avg_width_S'_wave_msec"])
+###All but 2 values are 0
+
+## V3-Average Widths of Waves (msec)
+ggplot(training1, aes(x = V3_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V3_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V3_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "V3_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V3_Avg_width_R'_wave_msec"])
+###All but 4 values are 0
+##ggplot(training1, aes(x = "V3_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V3_Avg_width_S'_wave_msec"])
+###All but 1 value are 0
+
+## V4-Average Widths of Waves (msec)
+ggplot(training1, aes(x = V4_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V4_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V4_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "V4_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V4_Avg_width_R'_wave_msec"])
+###Many values are 0
+##ggplot(training1, aes(x = "V4_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V4_Avg_width_S'_wave_msec"])
+###All but 1 value are 0
+
+## V5-Average Widths of Waves (msec)
+ggplot(training1, aes(x = V5_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V5_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V5_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "V5_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V5_Avg_width_R'_wave_msec"])
+###Many values are 0
+##ggplot(training1, aes(x = "V5_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V5_Avg_width_S'_wave_msec"])
+###All values are 0
+
+## V6-Average Widths of Waves (msec)
+ggplot(training1, aes(x = V6_Avg_width_Q_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V6_Avg_width_R_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+ggplot(training1, aes(x = V6_Avg_width_S_wave_msec, group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+  geom_histogram(alpha = 0.2)
+##ggplot(training1, aes(x = "V6_Avg_width_R'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V6_Avg_width_R'_wave_msec"])
+###All but 2 values are 0
+##ggplot(training1, aes(x = "V6_Avg_width_S'_wave_msec", group = Arrhythmia_Class, col = Arrhythmia_Class, fill = Arrhythmia_Class)) + 
+##  geom_histogram(stat = "count", alpha = 0.2)
+##summary(training1[, "V6_Avg_width_S'_wave_msec"])
+###All values are 0
+
+###12 Leads all similiar overall distributions for Q, R, S, R' and S' waves
+### Average Widths of Waves for DI and DII are similar.
+###DIII Average width for R wave is most different and wider. AVL and AVF Average width of R wave is similar to DIII's.
+###AVR's Average width of Q wave is also different.
+###V1's Average width of R wave and S waves differ too.
+###V6 Average width of S wave differs.
+
+##No of intrinsic deflections for the 12 Leads
+
+ggplot(training1, aes(x = DI_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = DII_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = DIII_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = AVR_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = AVL_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = AVF_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = V1_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = V2_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = V3_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = V4_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = V5_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+ggplot(training1, aes(x = V6_No_intrinsic_deflections)) + 
+  geom_histogram(aes(fill = Arrhythmia_Class, col = Arrhythmia_Class), alpha = 0.2) +
+  facet_wrap(Arrhythmia_Class~., ncol = 4)
+###Similar distributions to DI for AVL through to V6.  Distribution differ for DIII and AVR leads.
+
+
+## Existence of diphasic or notched R, P and T waves
+### DI Lead
+ggplot(training1, aes(x = DI_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DI_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DI_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DI_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DI_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DI_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### DII Lead
+ggplot(training1, aes(x = DII_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DII_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DII_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DII_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DII_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DII_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### DIII Lead
+ggplot(training1, aes(x = DIII_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DIII_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DIII_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DIII_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DIII_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = DIII_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### AVR Lead
+ggplot(training1, aes(x = AVR_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVR_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVR_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVR_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVR_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVR_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### AVL Lead
+ggplot(training1, aes(x = AVL_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVL_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVL_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVL_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVL_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVL_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### AVF Lead
+ggplot(training1, aes(x = AVF_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVF_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVF_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVF_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVF_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = AVF_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### V1 Lead
+ggplot(training1, aes(x = V1_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V1_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V1_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V1_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V1_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V1_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### V2 Lead
+ggplot(training1, aes(x = V2_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V2_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V2_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V2_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V2_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V2_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### V3 Lead
+ggplot(training1, aes(x = V3_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V3_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V3_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V3_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V3_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V3_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### V4 Lead
+ggplot(training1, aes(x = V4_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V4_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V4_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V4_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V4_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V4_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### V5 Lead
+ggplot(training1, aes(x = V5_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V5_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V5_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V5_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V5_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V5_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+### V6 Lead
+ggplot(training1, aes(x = V6_Existence_diphasic_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V6_Existence_notched_R_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V6_Existence_notched_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V6_Existence_diphasic_P_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V6_Existence_notched_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+ggplot(training1, aes(x = V6_Existence_diphasic_T_wave, y = Arrhythmia_Class)) +
+  geom_point(aes(col = Arrhythmia_Class), alpha = 0.2, position = "jitter") +
+  theme(legend.position="none")
+###Existence of notched or diphasic R, P and T waves do not differentiate classes well in this dataset.
+
+## Multivariate Analysis
+
+## Plot of all Average Duration between waves
+plot(training1[, 6:10])
+ggplot(training1, aes(x = Avg_QRS_duration_msec, col = "#FF9933")) + 
+  geom_density() +
+  geom_density(aes(x = Avg_duration_bet_onset_P_and_Q_waves_msec, col = "#999900")) +
+  geom_density(aes(x = Avg_duration_bet_onset_Q_and_offset_T_waves_msec, col = "#33CC00")) + 
+  geom_density(aes(x = Avg_duration_bet_two_consecutive_T_waves_msec, col = "#33CCFF")) + 
+  geom_density(aes(x = Avg_duration_bet_two_consecutive_P_waves_msec, col = "#FF66FF")) +
+  scale_color_manual(labels = c("Avg_QRS_duration_msec", "Avg_duration_bet_onset_P_and_Q_waves_msec",
+                                "Avg_duration_bet_onset_Q_and_offset_T_waves_msec", 
+                                "Avg_duration_bet_two_consecutive_T_waves_msec", 
+                                "Avg_duration_bet_two_consecutive_P_waves_msec"), values = c("#FF9933",
+                                  "#999900", "#33CC00", "#33CCFF", "#FF66FF"))
+###See some overlaps
+
+## Plot of all Vector Angles.
+plot(training1[, 11:15])
+ggplot(training1, aes(x = Vector_angle_front_QRS_deg, col = "#FF9933")) + 
+  geom_density() +
+  geom_density(aes(x = Vector_angle_front_T_deg, col = "#999900")) +
+  geom_density(aes(x = Vector_angle_front_P_deg, col = "#33CC00")) + 
+  geom_density(aes(x = Vector_angle_front_QRST_deg, col = "#33CCFF")) + 
+  geom_density(aes(x = Vector_angle_front_J_deg, col = "#FF66FF")) +
+  scale_color_manual(labels = c("Vector_angle_front_QRS_deg", "Vector_angle_front_T_deg",
+                                "Vector_angle_front_P_deg", 
+                                "Vector_angle_front_QRST_deg", 
+                                "Vector_angle_front_J_deg"), values = c("#FF9933", 
+                                  "#999900", "#33CC00", "#33CCFF", "#FF66FF"))
+#Shows slight difference in vector angles.
+
+# Number of Intrinsic Deflections
+ggplot(training1, aes(x = DI_No_intrinsic_deflections, col = "slategray1")) + 
+  geom_density() +
+  geom_density(aes(x = DII_No_intrinsic_deflections, col = "skyblue2")) +
+  geom_density(aes(x = DIII_No_intrinsic_deflections, col = "orchid2")) + 
+  geom_density(aes(x = AVR_No_intrinsic_deflections, col = "slateblue")) + 
+  geom_density(aes(x = AVL_No_intrinsic_deflections, col = "mediumpurple1")) +
+  geom_density(aes(x = AVF_No_intrinsic_deflections, col = "thistle2")) +
+  geom_density(aes(x = V1_No_intrinsic_deflections, col = "mistyrose")) +
+  geom_density(aes(x = V2_No_intrinsic_deflections, col = "plum1")) +
+  geom_density(aes(x = V3_No_intrinsic_deflections, col = "bisque")) +
+  geom_density(aes(x = V4_No_intrinsic_deflections, col = "pink1")) +
+  geom_density(aes(x = V5_No_intrinsic_deflections, col = "lightblue1")) +
+  geom_density(aes(x = V6_No_intrinsic_deflections, col = "lavender")) +
+  scale_color_manual(labels = c("DI", "DII", "DIII", "AVR", "AVL", "AVF", "V1", "V2", "V3", "V4", 
+                                  "V5", "V6"), values = c("slategray1", "skyblue2", "orchid2", 
+                                  "slateblue", "mediumpurple1", "thistle2", "mistyrose", "plum1",
+                                  "bisque", "pink1", "lightblue1", "lavender")) +
+  labs(color = "Lead Channels")
+### Similar distributions for leads but for AVL and V4 leads. 
+
+
+
+# More Exploratory Data Analysis
+
+#Prepare Data for EDA
+
+#### Impute for Missing Values using k-Nearest Neighbour algorithm
+
+## Load `DMwR` package
+library(DMwR)
+## Set seed for reproducible results
+set.seed(42)
+## Impute for missing values with 25 neighbors,setting 'scale' parameter to FALSE and using medians because medians are more robust to outliers.
+training1 <- knnImputation(training1, k = 25, scale = FALSE, meth = 'median')
+## Check for missing values
+sum(is.na(training1)) ### 0
+
+
+
+# Removing Zero-Variance or Near Zero Variance Attributes
+
+## Find attributes with zero variance
+
+## Load `caret` package
+library(caret)
+
+## Find features with 0 variance
+near_zero_var_attributes <- nearZeroVar(training1, freqCut = 500/1, uniqueCut = 1, names = TRUE)
+near_zero_var_attributes
+length(near_zero_var_attributes) ### 20 attributes can be removed.
+## Remove features with 0 variance
+training1 <- training1[, !(names(training1) %in% near_zero_var_attributes)]
+dim(training1) 
+###This datset has 323 observations and 260 attributes.
+
+
+# Checking for Normality
+
+## Because there are less than 2000 observations, the Shapiro test is used to check for normality in the continous variables.
+glimpse(training1)
+
+## Subset for the continous numeric variables from the dataset
+arr_numeric <- training1[, 145:260]
+
+## Using the Shapiro test
+### Create an empty list
+arr_shapiro_test <- list()
+### Append to list the p-values for the Shapiro tests for continuous numeric attributes
+for (i in 1:116) {
+  arr_shapiro_test[i] <- c(shapiro.test(arr_numeric[, i])$p.value)
+}
+### Return number of attributes with p-values greater than 0.05
+sum(arr_shapiro_test > 0.05)
+###Almost all of the p-values are less than 0.05, indicating that all these continous variables are not normally distributed.
+
+
+## Variances for Numeric Attributes
+num_var <- list()
+for (i in 1:ncol(arr_numeric)) {
+  num_var[i] <- c(var(arr_numeric[, i]))
+}
+names(num_var) <- names(arr_numeric)
+num_var
+
+ordered_var <- num_var[order(desc(data.frame(num_var)))]
+ordered_var
+plot(x = 1:116, y = ordered_var)
+low_variance_attributes <- ordered_var[which(ordered_var <= 5.00)]
+length(low_variance_attributes) ### 74 attributes
+low_variance_attributes
+
+## Standard Deviations for Numeric Attributes
+num_sd <- list()
+for (i in 1:ncol(arr_numeric)) {
+  num_sd[i] <- c(sd(arr_numeric[, i]))
+}
+names(num_sd) <- names(arr_numeric)
+num_sd
+
+
+## Correlation Analysis
+
+### Set seed for reproducibility
+set.seed(42)
+### Load package
+library(caret)
+### Transforming datset into numeric values (verified nominal, logical, integer, numeric types were alright to change into numeric type)
+training1_num <- sapply(training1, MARGIN = 2, FUN = as.numeric)
+class(training1_num)
+glimpse(training1_num)
+### Calculate correlation matrix
+correlationMatrix <- cor(training1_num, method="spearman")
+### Summarize the correlation matrix
+correlationMatrix
+### Find attributes that are highly correlated
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.7, names = TRUE)
+### Indices of highly correlated attributes
+highlyCorrelated
+
+names(correlationMatrix)
+names(highlyCorrelated)
+
+highlyCorrelatedAttributes <- correlationMatrix[,highlyCorrelated]
+
+### Generating a correlation matrix with p-values (note: the first argument of 'rcorr' function required changing dataframe to a matrix) 
+library(Hmisc)
+arr_corr_matrix <- rcorr(as.matrix(training1_num), type = "spearman")
+str(arr_corr_matrix)
+arr_corr_df_r <- data.frame(arr_corr_matrix$r)
+arr_corr_df_P <- data.frame(arr_corr_matrix$P)
+
+### Plotting correlation plot
+library(arr_corr_matrix)
+corrplot(arr_corr, method = "circle", type = "upper", order = "hclust", tl.col = "black", tl.cex = 0.1)
+##corrplot(arr_corr_matrix$r, type = "upper", order = "hclust", tl.col = "black", tl.cex = 0.1,
+##         p.mat = arr_corr_matrix$P, sig.level = 0.01, insig = "blank")
+##corrplot(arr_corr, method = "circle", type = "upper", tl.col = "black", tl.cex = 0.1)
+###Can see clusters of correlations among variables.
+
