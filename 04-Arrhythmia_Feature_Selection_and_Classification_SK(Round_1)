@@ -47,7 +47,6 @@ glimpse(training1)
 summary(training1)
 
 
-
 # Dealing with Missing Values
 
 ## Check Missing Values
