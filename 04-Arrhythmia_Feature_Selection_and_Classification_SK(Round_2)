@@ -40,7 +40,6 @@ test2 <- shuffled_data2[-inTrain2,]
 dim(training2) ###323 rows and 280 attributes 
 
 
-
 # Data Preprocessing
 
 glimpse(training2)
