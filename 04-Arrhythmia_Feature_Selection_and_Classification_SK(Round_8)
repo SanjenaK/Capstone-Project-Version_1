@@ -39,27 +39,15 @@ training8 <- shuffled_data8[inTrain8,]
 test8 <- shuffled_data8[-inTrain8,]
 dim(training8) ###323 rows and 280 attributes 
 
-# Exploratory Data Analysis and Data Preprocessing
+
+
+# Data Preprocessing
+
 glimpse(training8)
 head(training8)
 tail(training8)
-
-# Summary
 summary(training8)
 
-# Correlation
-
-# Variance
-
-# Univariate Analysis
-
-# Bivariate Analysis
-
-# Multivariate Analysis
-library(ggplot2)
-ggplot(training8, aes(x = Heart_rate_bpm, y = Avg_QRS_duration_msec)) +
-  geom_line() +
-  facet_wrap(~Arrhythmia_Class, ncol = 4)
 
 # Dealing with Missing Values
 
