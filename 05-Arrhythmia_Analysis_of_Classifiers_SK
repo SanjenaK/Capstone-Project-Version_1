@@ -1,0 +1,840 @@
+# Analysis on Predicting Algorithms for Arrhythmia Dataset
+
+
+
+# Effect Sizes
+
+
+## Install Packages
+##install.packages("effsize")
+##install.packages("pROC")
+
+## Load the library
+library(effsize)
+
+## Saving accuracies of models on 10 test sets as vectors
+acc_nb <- c(0.7054, 0.6434, 0.6822, 0.7209, 0.5891, 0.6589, 0.6512, 0.6899, 0.6744, 0.6512)
+median_acc_nb <- median(acc_nb)
+median_acc_nb
+acc_knn <- c(0.5039, 0.4651, 0.4806, 0.4961, 0.4574, 0.4419, 0.4419, 0.4729, 0.4884, 0.4341)
+median_acc_knn <- median(acc_knn)
+median_acc_knn
+acc_rf <- c(0.7674, 0.7674, 0.7752, 0.7597, 0.7209, 0.7674, 0.7752, 0.7752, 0.7597, 0.7674)
+median_acc_rf <- median(acc_rf)
+median_acc_rf
+acc_en <- c(0.7519, 0.7132, 0.7287, 0.7132, 0.7364, 0.6977, 0.7209, 0.7442, 0.7209, 0.7364)
+median_acc_en <- median(acc_en)
+median_acc_en
+
+## Calculate effect size: Cliff's Delta, conf.level = 0.95
+
+### Between NB and kNN
+res_nb_knn <- cliff.delta(acc_nb, acc_knn, return.dm = TRUE)
+res_nb_knn
+###Delta estimate is 1, the samples are fully disjoint.
+
+### Between NB and RF
+res_nb_rf <- cliff.delta(acc_nb, acc_rf, return.dm = TRUE)
+res_nb_rf
+###Delta estimate is -0.99 (large) and the samples are almost fully disjoint.
+
+### Between kNN and RF
+res_knn_rf <- cliff.delta(acc_knn, acc_rf, return.dm = TRUE)
+res_knn_rf
+###Delta estimate is -1 (large), the samples are fully disjoint.
+
+### Between NB and ensemble
+res_nb_en <- cliff.delta(acc_nb, acc_en, return.dm = TRUE)
+res_nb_en
+###Delta estimate is -0.9 (large), the samples are largely disjoint.
+
+### Between kNN and ensemble
+res_knn_en <- cliff.delta(acc_knn, acc_en, return.dm = TRUE)
+res_knn_en
+###Delta estimate is -1 (large) and the samples are fully disjoint.
+
+### Between RF and ensemble
+res_rf_en <- cliff.delta(acc_rf, acc_en, return.dm = TRUE)
+res_rf_en
+###Delta estimate is 0.88 (large) the samples are largely disjoint.
+
+
+
+## Check correlations between classifiers' accuracies
+cor(acc_nb, acc_knn) ### 0.666
+cor(acc_nb, acc_rf) ### 0.619
+cor(acc_knn, acc_rf) ### 0.0175
+###All correlations are less than 0.666. There is almost no correlation between kNN and RF.
+cor(acc_nb, acc_en) ### 0.0666
+cor(acc_knn, acc_en) ### 0.290
+cor(acc_rf, acc_en) ### -0.0886
+###All absolute correlations are less than 0.0886. There is almost no correlation between NB and RF.
+###There is weak correlation between kNN and ensembler.
+
+
+## Plot accuracies of NB, kNN and RF
+plot(acc_nb, acc_knn, title("Naive Byaes vs. k-Nearest Neighbors Accuracies", col = "green"))
+plot(acc_nb, acc_rf, title("Naive Byaes vs. Random Forest Accuracies"), col = "red")
+plot(acc_knn, acc_rf, title("k-Nearest Neighbors vs. Random Forest Accuracies", col = "orange"))
+
+
+
+# Calculate AUC
+
+
+## Load library
+library(pROC)
+
+# Round 1
+
+## Predicted values
+predictions_nb1
+predictions_knn1
+predictions_rf1
+final_predictions1
+test_data1$Arrhythmia_Class
+
+## Saving classes as numeric values
+predict_classes_nb1 <- as.numeric(predictions_nb1)-1
+predict_classes_knn1 <- as.numeric(predictions_knn1)-1
+predict_classes_rf1 <- as.numeric(predictions_rf1)-1
+final_predict_classes1 <- as.numeric(final_predictions1)-1
+actual_classes1 <- as.numeric(test_data1$Arrhythmia_Class)-1
+
+## Check number of observations in each class
+table(actual_classes1)
+table(predictions_nb1)
+table(predictions_knn1)
+table(predictions_rf1)
+table(final_predict_classes1)
+
+## Calculate AUC
+### For Naive Bayes
+auc_nb1 <- multiclass.roc(actual_classes1, predict_classes_nb1)
+print(auc_nb1) 
+###0.8215
+### For k-Nearest Neighbors
+auc_knn1 <- multiclass.roc(actual_classes1, predict_classes_knn1)
+print(auc_knn1) 
+###0.7252
+### For Random Forest
+auc_rf1 <- multiclass.roc(actual_classes1, predict_classes_rf1)
+print(auc_rf1)
+###0.8115
+auc_ensemble1 <- multiclass.roc(actual_classes1, final_predict_classes1)
+print(auc_ensemble1)
+###0.8388
+
+## Plot AUC
+### Naive Bayes
+rocs_nb1 <- auc_nb1[['rocs']]
+plot.roc(rocs_nb1[[1]])
+sapply(2:length(rocs_nb1),function(i) lines.roc(rocs_nb1[[i]],col=i))
+### k-Nearest Neighbors
+rocs_knn1 <- auc_knn1[['rocs']]
+plot.roc(rocs_knn1[[1]])
+sapply(2:length(rocs_knn1),function(i) lines.roc(rocs_knn1[[i]],col=i))
+### Random Forest
+rocs_rf1 <- auc_rf1[['rocs']]
+plot.roc(rocs_rf1[[1]])
+sapply(2:length(rocs_rf1),function(i) lines.roc(rocs_rf1[[i]],col=i))
+### Ensemble
+rocs_ensemble1 <- auc_ensemble1[['rocs']]
+plot.roc(rocs_ensemble1[[1]])
+sapply(2:length(rocs_ensemble1),function(i) lines.roc(rocs_ensemble1[[i]],col=i))
+
+## Sensitivity, Specificity, Pos Pred Value, Neg Pred Val, Precision, Recall and F1
+confMat_nb1$byClass
+confMat_knn1$byClass
+confMat_rf1$byClass
+confMat_ensembler1$byClass
+
+metrics_prf <- c("Precision", "Recall", "F1")
+print(confMat_nb1$byClass[, metrics_prf])
+print(confMat_knn1$byClass[, metrics_prf])
+print(confMat_rf1$byClass[, metrics_prf])
+print(confMat_ensembler1$byClass[, metrics_prf])
+
+metrics_ss <- c("Sensitivity", "Specificity")
+print(confMat_nb1$byClass[, metrics_ss])
+print(confMat_knn1$byClass[, metrics_ss])
+print(confMat_rf1$byClass[, metrics_ss])
+print(confMat_ensembler1$byClass[, metrics_ss])
+
+
+
+# Round 2
+
+## Predicted values
+predictions_nb2
+predictions_knn2
+predictions_rf2
+final_predictions2
+test_data2$Arrhythmia_Class
+
+## Saving classes as numeric values
+predict_classes_nb2 <- as.numeric(predictions_nb2)-1
+predict_classes_knn2 <- as.numeric(predictions_knn2)-1
+predict_classes_rf2 <- as.numeric(predictions_rf2)-1
+final_predict_classes2 <- as.numeric(final_predictions2)-1
+actual_classes2 <- as.numeric(test_data2$Arrhythmia_Class)-1
+
+## Check number of observations in each class
+table(actual_classes2)
+table(predictions_nb2)
+table(predictions_knn2)
+table(predictions_rf2)
+table(final_predict_classes2)
+
+## Calculate AUC
+### For Naive Bayes
+auc_nb2 <- multiclass.roc(actual_classes2, predict_classes_nb2)
+print(auc_nb2) 
+### For k-Nearest Neighbors
+auc_knn2 <- multiclass.roc(actual_classes2, predict_classes_knn2)
+print(auc_knn2) 
+### For Random Forest
+auc_rf2 <- multiclass.roc(actual_classes2, predict_classes_rf2)
+print(auc_rf2)
+auc_ensemble2 <- multiclass.roc(actual_classes2, final_predict_classes2)
+print(auc_ensemble2)
+
+## Plot AUC
+### Naive Bayes
+rocs_nb2 <- auc_nb2[['rocs']]
+plot.roc(rocs_nb2[[1]])
+sapply(2:length(rocs_nb2),function(i) lines.roc(rocs_nb2[[i]],col=i))
+### k-Nearest Neighbors
+rocs_knn2 <- auc_knn2[['rocs']]
+plot.roc(rocs_knn2[[1]])
+sapply(2:length(rocs_knn2),function(i) lines.roc(rocs_knn2[[i]],col=i))
+### Random Forest
+rocs_rf2 <- auc_rf2[['rocs']]
+plot.roc(rocs_rf2[[1]])
+sapply(2:length(rocs_rf2),function(i) lines.roc(rocs_rf2[[i]],col=i))
+### Ensemble
+rocs_ensemble2 <- auc_ensemble2[['rocs']]
+plot.roc(rocs_ensemble2[[1]])
+sapply(2:length(rocs_ensemble2),function(i) lines.roc(rocs_ensemble2[[i]],col=i))
+
+## Sensitivity, Specificity, Pos Pred Value, Neg Pred Val, Precision, Recall and F1
+confMat_nb2$byClass
+confMat_knn2$byClass
+confMat_rf2$byClass
+confMat_ensembler2$byClass
+
+metrics_prf <- c("Precision", "Recall", "F1")
+print(confMat_nb2$byClass[, metrics_prf])
+print(confMat_knn2$byClass[, metrics_prf])
+print(confMat_rf2$byClass[, metrics_prf])
+print(confMat_ensembler2$byClass[, metrics_prf])
+
+metrics_ss <- c("Sensitivity", "Specificity")
+print(confMat_nb2$byClass[, metrics_ss])
+print(confMat_knn2$byClass[, metrics_ss])
+print(confMat_rf2$byClass[, metrics_ss])
+print(confMat_ensembler2$byClass[, metrics_ss])
+
+
+
+# Round 3
+
+## Predicted values
+predictions_nb3
+predictions_knn3
+predictions_rf3
+final_predictions3
+test_data3$Arrhythmia_Class
+
+## Saving classes as numeric values
+predict_classes_nb3 <- as.numeric(predictions_nb3)-1
+predict_classes_knn3 <- as.numeric(predictions_knn3)-1
+predict_classes_rf3 <- as.numeric(predictions_rf3)-1
+final_predict_classes3 <- as.numeric(final_predictions3)-1
+actual_classes3 <- as.numeric(test_data3$Arrhythmia_Class)-1
+
+## Check number of observations in each class
+table(actual_classes3)
+table(predictions_nb3)
+table(predictions_knn3)
+table(predictions_rf3)
+table(final_predict_classes3)
+
+## Calculate AUC
+### For Naive Bayes
+auc_nb3 <- multiclass.roc(actual_classes3, predict_classes_nb3)
+print(auc_nb3) 
+### For k-Nearest Neighbors
+auc_knn3 <- multiclass.roc(actual_classes3, predict_classes_knn3)
+print(auc_knn3) 
+### For Random Forest
+auc_rf3 <- multiclass.roc(actual_classes3, predict_classes_rf3)
+print(auc_rf3)
+auc_ensemble3 <- multiclass.roc(actual_classes3, final_predict_classes3)
+print(auc_ensemble3)
+
+## Plot AUC
+### Naive Bayes
+rocs_nb3 <- auc_nb3[['rocs']]
+plot.roc(rocs_nb3[[1]])
+sapply(2:length(rocs_nb3),function(i) lines.roc(rocs_nb3[[i]],col=i))
+### k-Nearest Neighbors
+rocs_knn3 <- auc_knn3[['rocs']]
+plot.roc(rocs_knn3[[1]])
+sapply(2:length(rocs_knn3),function(i) lines.roc(rocs_knn3[[i]],col=i))
+### Random Forest
+rocs_rf3 <- auc_rf3[['rocs']]
+plot.roc(rocs_rf3[[1]])
+sapply(2:length(rocs_rf3),function(i) lines.roc(rocs_rf3[[i]],col=i))
+### Ensemble
+rocs_ensemble3 <- auc_ensemble3[['rocs']]
+plot.roc(rocs_ensemble3[[1]])
+sapply(2:length(rocs_ensemble3),function(i) lines.roc(rocs_ensemble3[[i]],col=i))
+
+## Sensitivity, Specificity, Pos Pred Value, Neg Pred Val, Precision, Recall and F1
+confMat_nb3$byClass
+confMat_knn3$byClass
+confMat_rf3$byClass
+confMat_ensembler3$byClass
+
+metrics_prf <- c("Precision", "Recall", "F1")
+print(confMat_nb3$byClass[, metrics_prf])
+print(confMat_knn3$byClass[, metrics_prf])
+print(confMat_rf3$byClass[, metrics_prf])
+print(confMat_ensembler3$byClass[, metrics_prf])
+
+metrics_ss <- c("Sensitivity", "Specificity")
+print(confMat_nb3$byClass[, metrics_ss])
+print(confMat_knn3$byClass[, metrics_ss])
+print(confMat_rf3$byClass[, metrics_ss])
+print(confMat_ensembler3$byClass[, metrics_ss])
+
+
+
+# Round 4
+
+## Predicted values
+predictions_nb4
+predictions_knn4
+predictions_rf4
+final_predictions4
+test_data4$Arrhythmia_Class
+
+## Saving classes as numeric values
+predict_classes_nb4 <- as.numeric(predictions_nb4)-1
+predict_classes_knn4 <- as.numeric(predictions_knn4)-1
+predict_classes_rf4 <- as.numeric(predictions_rf4)-1
+final_predict_classes4 <- as.numeric(final_predictions4)-1
+actual_classes4 <- as.numeric(test_data4$Arrhythmia_Class)-1
+
+## Check number of observations in each class
+table(actual_classes4)
+table(predictions_nb4)
+table(predictions_knn4)
+table(predictions_rf4)
+table(final_predict_classes4)
+
+## Calculate AUC
+### For Naive Bayes
+auc_nb4 <- multiclass.roc(actual_classes4, predict_classes_nb4)
+print(auc_nb4) 
+### For k-Nearest Neighbors
+auc_knn4 <- multiclass.roc(actual_classes4, predict_classes_knn4)
+print(auc_knn4) 
+### For Random Forest
+auc_rf4 <- multiclass.roc(actual_classes4, predict_classes_rf4)
+print(auc_rf4)
+auc_ensemble4 <- multiclass.roc(actual_classes4, final_predict_classes4)
+print(auc_ensemble4)
+
+## Plot AUC
+### Naive Bayes
+rocs_nb4 <- auc_nb4[['rocs']]
+plot.roc(rocs_nb4[[1]])
+sapply(2:length(rocs_nb4),function(i) lines.roc(rocs_nb4[[i]],col=i))
+### k-Nearest Neighbors
+rocs_knn4 <- auc_knn4[['rocs']]
+plot.roc(rocs_knn4[[1]])
+sapply(2:length(rocs_knn4),function(i) lines.roc(rocs_knn4[[i]],col=i))
+### Random Forest
+rocs_rf4 <- auc_rf4[['rocs']]
+plot.roc(rocs_rf4[[1]])
+sapply(2:length(rocs_rf4),function(i) lines.roc(rocs_rf4[[i]],col=i))
+### Ensemble
+rocs_ensemble4 <- auc_ensemble4[['rocs']]
+plot.roc(rocs_ensemble4[[1]])
+sapply(2:length(rocs_ensemble4),function(i) lines.roc(rocs_ensemble4[[i]],col=i))
+
+## Sensitivity, Specificity, Pos Pred Value, Neg Pred Val, Precision, Recall and F1
+confMat_nb4$byClass
+confMat_knn4$byClass
+confMat_rf4$byClass
+confMat_ensembler4$byClass
+
+metrics_prf <- c("Precision", "Recall", "F1")
+print(confMat_nb4$byClass[, metrics_prf])
+print(confMat_knn4$byClass[, metrics_prf])
+print(confMat_rf4$byClass[, metrics_prf])
+print(confMat_ensembler4$byClass[, metrics_prf])
+
+metrics_ss <- c("Sensitivity", "Specificity")
+print(confMat_nb4$byClass[, metrics_ss])
+print(confMat_knn4$byClass[, metrics_ss])
+print(confMat_rf4$byClass[, metrics_ss])
+print(confMat_ensembler4$byClass[, metrics_ss])
+
+
+
+# Round 5
+
+## Predicted values
+predictions_nb5
+predictions_knn5
+predictions_rf5
+final_predictions5
+test_data5$Arrhythmia_Class
+
+## Saving classes as numeric values
+predict_classes_nb5 <- as.numeric(predictions_nb5)-1
+predict_classes_knn5 <- as.numeric(predictions_knn5)-1
+predict_classes_rf5 <- as.numeric(predictions_rf5)-1
+final_predict_classes5 <- as.numeric(final_predictions5)-1
+actual_classes5 <- as.numeric(test_data5$Arrhythmia_Class)-1
+
+## Check number of observations in each class
+table(actual_classes5)
+table(predictions_nb5)
+table(predictions_knn5)
+table(predictions_rf5)
+table(final_predict_classes5)
+
+## Calculate AUC
+### For Naive Bayes
+auc_nb5 <- multiclass.roc(actual_classes5, predict_classes_nb5)
+print(auc_nb5) 
+### For k-Nearest Neighbors
+auc_knn5 <- multiclass.roc(actual_classes5, predict_classes_knn5)
+print(auc_knn5) 
+### For Random Forest
+auc_rf5 <- multiclass.roc(actual_classes5, predict_classes_rf5)
+print(auc_rf5)
+auc_ensemble5 <- multiclass.roc(actual_classes5, final_predict_classes5)
+print(auc_ensemble5)
+
+## Plot AUC
+### Naive Bayes
+rocs_nb5 <- auc_nb5[['rocs']]
+plot.roc(rocs_nb5[[1]])
+sapply(2:length(rocs_nb5),function(i) lines.roc(rocs_nb5[[i]],col=i))
+### k-Nearest Neighbors
+rocs_knn5 <- auc_knn5[['rocs']]
+plot.roc(rocs_knn5[[1]])
+sapply(2:length(rocs_knn5),function(i) lines.roc(rocs_knn5[[i]],col=i))
+### Random Forest
+rocs_rf5 <- auc_rf5[['rocs']]
+plot.roc(rocs_rf5[[1]])
+sapply(2:length(rocs_rf5),function(i) lines.roc(rocs_rf5[[i]],col=i))
+### Ensemble
+rocs_ensemble5 <- auc_ensemble5[['rocs']]
+plot.roc(rocs_ensemble5[[1]])
+sapply(2:length(rocs_ensemble5),function(i) lines.roc(rocs_ensemble5[[i]],col=i))
+
+## Sensitivity, Specificity, Pos Pred Value, Neg Pred Val, Precision, Recall and F1
+confMat_nb5$byClass
+confMat_knn5$byClass
+confMat_rf5$byClass
+confMat_ensembler5$byClass
+
+metrics_prf <- c("Precision", "Recall", "F1")
+print(confMat_nb5$byClass[, metrics_prf])
+print(confMat_knn5$byClass[, metrics_prf])
+print(confMat_rf5$byClass[, metrics_prf])
+print(confMat_ensembler5$byClass[, metrics_prf])
+
+metrics_ss <- c("Sensitivity", "Specificity")
+print(confMat_nb5$byClass[, metrics_ss])
+print(confMat_knn5$byClass[, metrics_ss])
+print(confMat_rf5$byClass[, metrics_ss])
+print(confMat_ensembler5$byClass[, metrics_ss])
+
+
+
+# Round 6
+
+## Predicted values
+predictions_nb6
+predictions_knn6
+predictions_rf6
+final_predictions6
+test_data6$Arrhythmia_Class
+
+## Saving classes as numeric values
+predict_classes_nb6 <- as.numeric(predictions_nb6)-1
+predict_classes_knn6 <- as.numeric(predictions_knn6)-1
+predict_classes_rf6 <- as.numeric(predictions_rf6)-1
+final_predict_classes6 <- as.numeric(final_predictions6)-1
+actual_classes6 <- as.numeric(test_data6$Arrhythmia_Class)-1
+
+## Check number of observations in each class
+table(actual_classes6)
+table(predictions_nb6)
+table(predictions_knn6)
+table(predictions_rf6)
+table(final_predict_classes6)
+
+## Calculate AUC
+### For Naive Bayes
+auc_nb6 <- multiclass.roc(actual_classes6, predict_classes_nb6)
+print(auc_nb6) 
+### For k-Nearest Neighbors
+auc_knn6 <- multiclass.roc(actual_classes6, predict_classes_knn6)
+print(auc_knn6) 
+### For Random Forest
+auc_rf6 <- multiclass.roc(actual_classes6, predict_classes_rf6)
+print(auc_rf6)
+auc_ensemble6 <- multiclass.roc(actual_classes6, final_predict_classes6)
+print(auc_ensemble6)
+
+## Plot AUC
+### Naive Bayes
+rocs_nb6 <- auc_nb6[['rocs']]
+plot.roc(rocs_nb6[[1]])
+sapply(2:length(rocs_nb6),function(i) lines.roc(rocs_nb6[[i]],col=i))
+### k-Nearest Neighbors
+rocs_knn6 <- auc_knn6[['rocs']]
+plot.roc(rocs_knn6[[1]])
+sapply(2:length(rocs_knn6),function(i) lines.roc(rocs_knn6[[i]],col=i))
+### Random Forest
+rocs_rf6 <- auc_rf6[['rocs']]
+plot.roc(rocs_rf6[[1]])
+sapply(2:length(rocs_rf6),function(i) lines.roc(rocs_rf6[[i]],col=i))
+### Ensemble
+rocs_ensemble6 <- auc_ensemble6[['rocs']]
+plot.roc(rocs_ensemble6[[1]])
+sapply(2:length(rocs_ensemble6),function(i) lines.roc(rocs_ensemble6[[i]],col=i))
+
+## Sensitivity, Specificity, Pos Pred Value, Neg Pred Val, Precision, Recall and F1
+confMat_nb6$byClass
+confMat_knn6$byClass
+confMat_rf6$byClass
+confMat_ensembler6$byClass
+
+metrics_prf <- c("Precision", "Recall", "F1")
+print(confMat_nb6$byClass[, metrics_prf])
+print(confMat_knn6$byClass[, metrics_prf])
+print(confMat_rf6$byClass[, metrics_prf])
+print(confMat_ensembler6$byClass[, metrics_prf])
+
+metrics_ss <- c("Sensitivity", "Specificity")
+print(confMat_nb6$byClass[, metrics_ss])
+print(confMat_knn6$byClass[, metrics_ss])
+print(confMat_rf6$byClass[, metrics_ss])
+print(confMat_ensembler6$byClass[, metrics_ss])
+
+
+
+# Round 7
+
+## Predicted values
+predictions_nb7
+predictions_knn7
+predictions_rf7
+final_predictions7
+test_data7$Arrhythmia_Class
+
+## Saving classes as numeric values
+predict_classes_nb7 <- as.numeric(predictions_nb7)-1
+predict_classes_knn7 <- as.numeric(predictions_knn7)-1
+predict_classes_rf7 <- as.numeric(predictions_rf7)-1
+final_predict_classes7 <- as.numeric(final_predictions7)-1
+actual_classes7 <- as.numeric(test_data7$Arrhythmia_Class)-1
+
+## Check number of observations in each class
+table(actual_classes7)
+table(predictions_nb7)
+table(predictions_knn7)
+table(predictions_rf7)
+table(final_predict_classes7)
+
+## Calculate AUC
+### For Naive Bayes
+auc_nb7 <- multiclass.roc(actual_classes7, predict_classes_nb7)
+print(auc_nb7) 
+### For k-Nearest Neighbors
+auc_knn7 <- multiclass.roc(actual_classes7, predict_classes_knn7)
+print(auc_knn7) 
+### For Random Forest
+auc_rf7 <- multiclass.roc(actual_classes7, predict_classes_rf7)
+print(auc_rf7)
+auc_ensemble7 <- multiclass.roc(actual_classes7, final_predict_classes7)
+print(auc_ensemble7)
+
+## Plot AUC
+### Naive Bayes
+rocs_nb7 <- auc_nb7[['rocs']]
+plot.roc(rocs_nb7[[1]])
+sapply(2:length(rocs_nb7),function(i) lines.roc(rocs_nb7[[i]],col=i))
+### k-Nearest Neighbors
+rocs_knn7 <- auc_knn7[['rocs']]
+plot.roc(rocs_knn7[[1]])
+sapply(2:length(rocs_knn7),function(i) lines.roc(rocs_knn7[[i]],col=i))
+### Random Forest
+rocs_rf7 <- auc_rf7[['rocs']]
+plot.roc(rocs_rf7[[1]])
+sapply(2:length(rocs_rf7),function(i) lines.roc(rocs_rf7[[i]],col=i))
+### Ensemble
+rocs_ensemble7 <- auc_ensemble7[['rocs']]
+plot.roc(rocs_ensemble7[[1]])
+sapply(2:length(rocs_ensemble7),function(i) lines.roc(rocs_ensemble7[[i]],col=i))
+
+## Sensitivity, Specificity, Pos Pred Value, Neg Pred Val, Precision, Recall and F1
+confMat_nb7$byClass
+confMat_knn7$byClass
+confMat_rf7$byClass
+confMat_ensembler7$byClass
+
+metrics_prf <- c("Precision", "Recall", "F1")
+print(confMat_nb7$byClass[, metrics_prf])
+print(confMat_knn7$byClass[, metrics_prf])
+print(confMat_rf7$byClass[, metrics_prf])
+print(confMat_ensembler7$byClass[, metrics_prf])
+
+metrics_ss <- c("Sensitivity", "Specificity")
+print(confMat_nb7$byClass[, metrics_ss])
+print(confMat_knn7$byClass[, metrics_ss])
+print(confMat_rf7$byClass[, metrics_ss])
+print(confMat_ensembler7$byClass[, metrics_ss])
+
+
+
+# Round 8
+
+## Predicted values
+predictions_nb8
+predictions_knn8
+predictions_rf8
+final_predictions8
+test_data8$Arrhythmia_Class
+
+## Saving classes as numeric values
+predict_classes_nb8 <- as.numeric(predictions_nb8)-1
+predict_classes_knn8 <- as.numeric(predictions_knn8)-1
+predict_classes_rf8 <- as.numeric(predictions_rf8)-1
+final_predict_classes8 <- as.numeric(final_predictions8)-1
+actual_classes8 <- as.numeric(test_data8$Arrhythmia_Class)-1
+
+## Check number of observations in each class
+table(actual_classes8)
+table(predictions_nb8)
+table(predictions_knn8)
+table(predictions_rf8)
+table(final_predict_classes8)
+
+## Calculate AUC
+### For Naive Bayes
+auc_nb8 <- multiclass.roc(actual_classes8, predict_classes_nb8)
+print(auc_nb8) 
+### For k-Nearest Neighbors
+auc_knn8 <- multiclass.roc(actual_classes8, predict_classes_knn8)
+print(auc_knn8) 
+### For Random Forest
+auc_rf8 <- multiclass.roc(actual_classes8, predict_classes_rf8)
+print(auc_rf8)
+auc_ensemble8 <- multiclass.roc(actual_classes8, final_predict_classes8)
+print(auc_ensemble8)
+
+## Plot AUC
+### Naive Bayes
+rocs_nb8 <- auc_nb8[['rocs']]
+plot.roc(rocs_nb8[[1]])
+sapply(2:length(rocs_nb8),function(i) lines.roc(rocs_nb8[[i]],col=i))
+### k-Nearest Neighbors
+rocs_knn8 <- auc_knn8[['rocs']]
+plot.roc(rocs_knn8[[1]])
+sapply(2:length(rocs_knn8),function(i) lines.roc(rocs_knn8[[i]],col=i))
+### Random Forest
+rocs_rf8 <- auc_rf8[['rocs']]
+plot.roc(rocs_rf8[[1]])
+sapply(2:length(rocs_rf8),function(i) lines.roc(rocs_rf8[[i]],col=i))
+### Ensemble
+rocs_ensemble8 <- auc_ensemble8[['rocs']]
+plot.roc(rocs_ensemble8[[1]])
+sapply(2:length(rocs_ensemble8),function(i) lines.roc(rocs_ensemble8[[i]],col=i))
+
+## Sensitivity, Specificity, Pos Pred Value, Neg Pred Val, Precision, Recall and F1
+confMat_nb8$byClass
+confMat_knn8$byClass
+confMat_rf8$byClass
+confMat_ensembler8$byClass
+
+metrics_prf <- c("Precision", "Recall", "F1")
+print(confMat_nb8$byClass[, metrics_prf])
+print(confMat_knn8$byClass[, metrics_prf])
+print(confMat_rf8$byClass[, metrics_prf])
+print(confMat_ensembler8$byClass[, metrics_prf])
+
+metrics_ss <- c("Sensitivity", "Specificity")
+print(confMat_nb8$byClass[, metrics_ss])
+print(confMat_knn8$byClass[, metrics_ss])
+print(confMat_rf8$byClass[, metrics_ss])
+print(confMat_ensembler8$byClass[, metrics_ss])
+
+
+
+# Round 9
+
+## Predicted values
+predictions_nb9
+predictions_knn9
+predictions_rf9
+final_predictions9
+test_data9$Arrhythmia_Class
+
+## Saving classes as numeric values
+predict_classes_nb9 <- as.numeric(predictions_nb9)-1
+predict_classes_knn9 <- as.numeric(predictions_knn9)-1
+predict_classes_rf9 <- as.numeric(predictions_rf9)-1
+final_predict_classes9 <- as.numeric(final_predictions9)-1
+actual_classes9 <- as.numeric(test_data9$Arrhythmia_Class)-1
+
+## Check number of observations in each class
+table(actual_classes9)
+table(predictions_nb9)
+table(predictions_knn9)
+table(predictions_rf9)
+table(final_predict_classes9)
+
+## Calculate AUC
+### For Naive Bayes
+auc_nb9 <- multiclass.roc(actual_classes9, predict_classes_nb9)
+print(auc_nb9) 
+### For k-Nearest Neighbors
+auc_knn9 <- multiclass.roc(actual_classes9, predict_classes_knn9)
+print(auc_knn9) 
+### For Random Forest
+auc_rf9 <- multiclass.roc(actual_classes9, predict_classes_rf9)
+print(auc_rf9)
+auc_ensemble9 <- multiclass.roc(actual_classes9, final_predict_classes9)
+print(auc_ensemble9)
+
+## Plot AUC
+### Naive Bayes
+rocs_nb9 <- auc_nb9[['rocs']]
+plot.roc(rocs_nb9[[1]])
+sapply(2:length(rocs_nb9),function(i) lines.roc(rocs_nb9[[i]],col=i))
+### k-Nearest Neighbors
+rocs_knn9 <- auc_knn9[['rocs']]
+plot.roc(rocs_knn9[[1]])
+sapply(2:length(rocs_knn9),function(i) lines.roc(rocs_knn9[[i]],col=i))
+### Random Forest
+rocs_rf9 <- auc_rf9[['rocs']]
+plot.roc(rocs_rf9[[1]])
+sapply(2:length(rocs_rf9),function(i) lines.roc(rocs_rf9[[i]],col=i))
+### Ensemble
+rocs_ensemble9 <- auc_ensemble9[['rocs']]
+plot.roc(rocs_ensemble9[[1]])
+sapply(2:length(rocs_ensemble9),function(i) lines.roc(rocs_ensemble9[[i]],col=i))
+
+## Sensitivity, Specificity, Pos Pred Value, Neg Pred Val, Precision, Recall and F1
+confMat_nb9$byClass
+confMat_knn9$byClass
+confMat_rf9$byClass
+confMat_ensembler9$byClass
+
+metrics_prf <- c("Precision", "Recall", "F1")
+print(confMat_nb9$byClass[, metrics_prf])
+print(confMat_knn9$byClass[, metrics_prf])
+print(confMat_rf9$byClass[, metrics_prf])
+print(confMat_ensembler9$byClass[, metrics_prf])
+
+metrics_ss <- c("Sensitivity", "Specificity")
+print(confMat_nb9$byClass[, metrics_ss])
+print(confMat_knn9$byClass[, metrics_ss])
+print(confMat_rf9$byClass[, metrics_ss])
+print(confMat_ensembler9$byClass[, metrics_ss])
+
+
+
+# Round 10
+
+## Predicted values
+predictions_nb10
+predictions_knn10
+predictions_rf10
+final_predictions10
+test_data10$Arrhythmia_Class
+
+## Saving classes as numeric values
+predict_classes_nb10 <- as.numeric(predictions_nb10)-1
+predict_classes_knn10 <- as.numeric(predictions_knn10)-1
+predict_classes_rf10 <- as.numeric(predictions_rf10)-1
+final_predict_classes10 <- as.numeric(final_predictions10)-1
+actual_classes10 <- as.numeric(test_data10$Arrhythmia_Class)-1
+
+## Check number of observations in each class
+table(actual_classes10)
+table(predictions_nb10)
+table(predictions_knn10)
+table(predictions_rf10)
+table(final_predict_classes10)
+
+## Calculate AUC
+### For Naive Bayes
+auc_nb10 <- multiclass.roc(actual_classes10, predict_classes_nb10)
+print(auc_nb10) 
+### For k-Nearest Neighbors
+auc_knn10 <- multiclass.roc(actual_classes10, predict_classes_knn10)
+print(auc_knn10) 
+### For Random Forest
+auc_rf10 <- multiclass.roc(actual_classes10, predict_classes_rf10)
+print(auc_rf10)
+auc_ensemble10 <- multiclass.roc(actual_classes10, final_predict_classes10)
+print(auc_ensemble10)
+
+## Plot AUC
+### Naive Bayes
+rocs_nb10 <- auc_nb10[['rocs']]
+plot.roc(rocs_nb10[[1]])
+sapply(2:length(rocs_nb10),function(i) lines.roc(rocs_nb10[[i]],col=i))
+### k-Nearest Neighbors
+rocs_knn10 <- auc_knn10[['rocs']]
+plot.roc(rocs_knn10[[1]])
+sapply(2:length(rocs_knn10),function(i) lines.roc(rocs_knn10[[i]],col=i))
+### Random Forest
+rocs_rf10 <- auc_rf10[['rocs']]
+plot.roc(rocs_rf10[[1]])
+sapply(2:length(rocs_rf10),function(i) lines.roc(rocs_rf10[[i]],col=i))
+### Ensemble
+rocs_ensemble10 <- auc_ensemble10[['rocs']]
+plot.roc(rocs_ensemble10[[1]])
+sapply(2:length(rocs_ensemble10),function(i) lines.roc(rocs_ensemble10[[i]],col=i))
+
+## Sensitivity, Specificity, Pos Pred Value, Neg Pred Val, Precision, Recall and F1
+confMat_nb10$byClass
+confMat_knn10$byClass
+confMat_rf10$byClass
+confMat_ensembler10$byClass
+
+metrics_prf <- c("Precision", "Recall", "F1")
+print(confMat_nb10$byClass[, metrics_prf])
+print(confMat_knn10$byClass[, metrics_prf])
+print(confMat_rf10$byClass[, metrics_prf])
+print(confMat_ensembler10$byClass[, metrics_prf])
+
+metrics_ss <- c("Sensitivity", "Specificity")
+print(confMat_nb10$byClass[, metrics_ss])
+print(confMat_knn10$byClass[, metrics_ss])
+print(confMat_rf10$byClass[, metrics_ss])
+print(confMat_ensembler10$byClass[, metrics_ss])
+
+### More information
+info1 <- data.frame(cbind(confMat_nb1$byClass, confMat_knn1$byClass, confMat_rf1$byClass, confMat_ensembler1$byClass))
+info2 <- data.frame(cbind(confMat_nb2$byClass, confMat_knn2$byClass, confMat_rf2$byClass, confMat_ensembler2$byClass))
+info3 <- data.frame(cbind(confMat_nb3$byClass, confMat_knn3$byClass, confMat_rf3$byClass, confMat_ensembler3$byClass))
+info4 <- data.frame(cbind(confMat_nb4$byClass, confMat_knn4$byClass, confMat_rf4$byClass, confMat_ensembler4$byClass))
+info5 <- data.frame(cbind(confMat_nb5$byClass, confMat_knn5$byClass, confMat_rf5$byClass, confMat_ensembler5$byClass))
+info6 <- data.frame(cbind(confMat_nb6$byClass, confMat_knn6$byClass, confMat_rf6$byClass, confMat_ensembler6$byClass))
+info7 <- data.frame(cbind(confMat_nb7$byClass, confMat_knn7$byClass, confMat_rf7$byClass, confMat_ensembler7$byClass))
+info8 <- data.frame(cbind(confMat_nb8$byClass, confMat_knn8$byClass, confMat_rf8$byClass, confMat_ensembler8$byClass))
+info9 <- data.frame(cbind(confMat_nb9$byClass, confMat_knn9$byClass, confMat_rf9$byClass, confMat_ensembler9$byClass))
+info10 <- data.frame(cbind(confMat_nb10$byClass, confMat_knn10$byClass, confMat_rf10$byClass, confMat_ensembler10$byClass))
